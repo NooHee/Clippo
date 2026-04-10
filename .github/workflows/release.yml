@@ -4,22 +4,27 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: macos-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
@@ -29,6 +34,32 @@ jobs:
         run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-files
+          path: |
+            release/*.dmg
+            release/*.zip
+          retention-days: 1
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-files
+          path: release/
 
       - name: Get version
         id: pkg
@@ -42,12 +73,13 @@ jobs:
           body: |
             Automated build from commit ${{ github.sha }}
 
-            **Download the right DMG for your Mac:**
-            - `ClipStack-*-arm64.dmg` → Apple Silicon (M1/M2/M3/M4)
-            - `ClipStack-*.dmg` (no arm64) → Intel Mac
+            **Download the right file for your Mac:**
+            - `ClipStack-*-arm64-mac.zip` → Apple Silicon (M1/M2/M3/M4) — unzip and drag to Applications
+            - `ClipStack-*.dmg` → Intel Mac
 
             > First launch: right-click the app → Open to bypass Gatekeeper.
           files: |
             release/*.dmg
+            release/*.zip
           draft: false
           prerelease: false
