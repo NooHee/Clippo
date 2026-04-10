@@ -1,6 +1,6 @@
 {
   "name": "clipstack",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "description": "Clipboard history manager for macOS",
   "main": "dist/main/main/index.js",
   "scripts": {
@@ -18,7 +18,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
     "electron": "^28.2.0",
-    "electron-builder": "^24.9.1",
+    "electron-builder": "^25.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "typescript": "^5.3.3",
@@ -33,11 +33,13 @@
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        { "target": "dmg", "arch": ["x64"] },
+        { "target": "zip", "arch": ["arm64"] }
       ]
     },
     "dmg": {
       "title": "Install ClipStack",
+      "background": null,
       "contents": [
         { "x": 130, "y": 220 },
         { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
