@@ -28,7 +28,7 @@ jobs:
       - name: Build & package
         run: npm run dist
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Get version
         id: pkg

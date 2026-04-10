@@ -1,6 +1,6 @@
 {
   "name": "clipstack",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "description": "Clipboard history manager for macOS",
   "main": "dist/main/main/index.js",
   "scripts": {
@@ -38,6 +38,7 @@
     },
     "dmg": {
       "title": "Install ClipStack",
+      "background": null,
       "contents": [
         { "x": 130, "y": 220 },
         { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
