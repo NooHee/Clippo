@@ -37,7 +37,7 @@ function createWindow(): BrowserWindow {
     win.loadFile(path.join(app.getAppPath(), 'dist/renderer/index.html'));
   }
 
-  win.webContents.openDevTools({ mode: 'detach' });
+  if (isDev) win.webContents.openDevTools({ mode: 'detach' });
 
   win.on('blur', () => {
     if (loadSettings().dismissOnBlur) win.hide();
@@ -51,7 +51,11 @@ function createWindow(): BrowserWindow {
 }
 
 function createTray(win: BrowserWindow): Tray {
-  const icon = nativeImage.createEmpty();
+  const iconPath = isDev
+    ? path.join(__dirname, '../../../assets/icon.png')
+    : path.join(process.resourcesPath, 'app.asar', 'assets', 'icon.png');
+  const rawIcon = nativeImage.createFromPath(iconPath);
+  const icon = rawIcon.isEmpty() ? nativeImage.createEmpty() : rawIcon.resize({ width: 16, height: 16 });
   const t = new Tray(icon);
 
   const contextMenu = Menu.buildFromTemplate([

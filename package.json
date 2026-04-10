@@ -9,7 +9,7 @@
     "build": "npm run build:main && npm run build:renderer",
     "dev": "concurrently -k \"vite\" \"npm run build:main && wait-on http://localhost:5173 && NODE_ENV=development electron .\"",
     "start": "npm run build && electron .",
-    "pack": "npm run build && electron-builder --mac"
+    "dist": "npm run build && electron-builder --mac"
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
@@ -28,12 +28,24 @@
   "build": {
     "appId": "com.clipstack.app",
     "productName": "ClipStack",
+    "asar": true,
     "mac": {
       "category": "public.app-category.productivity",
-      "target": "dmg"
+      "icon": "assets/icon.icns",
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ]
+    },
+    "dmg": {
+      "title": "Install ClipStack",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
     },
     "files": [
-      "dist/**/*"
+      "dist/**/*",
+      "assets/**/*"
     ],
     "directories": {
       "output": "release"

@@ -1,0 +1,53 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build & package
+        run: npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.pkg.outputs.version }}-${{ github.run_number }}
+          name: ClipStack v${{ steps.pkg.outputs.version }} (build ${{ github.run_number }})
+          body: |
+            Automated build from commit ${{ github.sha }}
+
+            **Download the right DMG for your Mac:**
+            - `ClipStack-*-arm64.dmg` → Apple Silicon (M1/M2/M3/M4)
+            - `ClipStack-*.dmg` (no arm64) → Intel Mac
+
+            > First launch: right-click the app → Open to bypass Gatekeeper.
+          files: |
+            release/*.dmg
+          draft: false
+          prerelease: false
