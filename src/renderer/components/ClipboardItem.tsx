@@ -29,6 +29,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
   const [hovered, setHovered] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewRef = useRef<HTMLParagraphElement>(null);
+  const overButtonsRef = useRef(false);
 
   const isPinned = entry.pinnedAt !== null;
 
@@ -40,11 +41,12 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
   const handleMouseEnter = () => setHovered(true);
   const handleMouseLeave = () => {
     setHovered(false);
+    overButtonsRef.current = false;
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
     window.clipstack.hideTooltip();
   };
   const handleMouseMove = () => {
-    if (!isTruncated()) return;
+    if (!isTruncated() || overButtonsRef.current) return;
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
     tooltipTimer.current = setTimeout(() => {
       window.clipstack.showTooltip(entry.content);
@@ -65,7 +67,18 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
       </div>
 
       {hovered && (
-        <div className="item-actions" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="item-actions"
+          onClick={(e) => e.stopPropagation()}
+          onMouseEnter={() => {
+            overButtonsRef.current = true;
+            if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+            window.clipstack.hideTooltip();
+          }}
+          onMouseLeave={() => {
+            overButtonsRef.current = false;
+          }}
+        >
           <button
             className="action-btn"
             onClick={() => onAddToGroup(entry)}

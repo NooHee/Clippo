@@ -200,6 +200,7 @@ const GroupEntryItem: React.FC<{
   const [hovered, setHovered] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewRef = useRef<HTMLParagraphElement>(null);
+  const overButtonsRef = useRef(false);
 
   const isTruncated = () => {
     const el = previewRef.current;
@@ -209,11 +210,12 @@ const GroupEntryItem: React.FC<{
   const handleMouseEnter = () => setHovered(true);
   const handleMouseLeave = () => {
     setHovered(false);
+    overButtonsRef.current = false;
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
     window.clipstack.hideTooltip();
   };
   const handleMouseMove = () => {
-    if (!isTruncated()) return;
+    if (!isTruncated() || overButtonsRef.current) return;
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
     tooltipTimer.current = setTimeout(() => {
       window.clipstack.showTooltip(entry.content);
@@ -235,7 +237,18 @@ const GroupEntryItem: React.FC<{
         </span>
       </div>
       {hovered && (
-        <div className="item-actions" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="item-actions"
+          onClick={(e) => e.stopPropagation()}
+          onMouseEnter={() => {
+            overButtonsRef.current = true;
+            if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+            window.clipstack.hideTooltip();
+          }}
+          onMouseLeave={() => {
+            overButtonsRef.current = false;
+          }}
+        >
           <button
             className="action-btn delete-btn"
             onClick={onRemove}
