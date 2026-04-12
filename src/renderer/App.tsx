@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SearchBar } from './components/SearchBar';
 import { ClipboardList } from './components/ClipboardList';
 import { GroupsView } from './components/GroupsView';
@@ -16,6 +16,19 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [pickerEntry, setPickerEntry] = useState<ClipboardEntry | null>(null);
 
+  const applyTheme = useCallback(() => {
+    window.clipstack.getSettings().then((s) => {
+      const root = document.documentElement;
+      if (s.theme === 'system') {
+        root.removeAttribute('data-theme');
+      } else {
+        root.setAttribute('data-theme', s.theme);
+      }
+    });
+  }, []);
+
+  useEffect(() => { applyTheme(); }, [applyTheme]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') window.clipstack.hideWindow();
@@ -24,17 +37,25 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Reset transient UI state as soon as the window hides — runs in the renderer
-  // process directly, no IPC roundtrip, so the state is already clean on next open.
   useEffect(() => {
-    const onVisibility = () => {
-      if (document.hidden) {
-        setShowSettings(false);
-        setPickerEntry(null);
-      }
+    const unsubscribeHidden = window.clipstack.onWindowHidden(() => {
+      window.clipstack.hideTooltip();
+    });
+
+    // Window is transparent (opacity=0) but still composited — reset state now
+    // so Chromium paints the correct frame before the window actually hides.
+    const unsubscribeWillHide = window.clipstack.onWindowWillHide(() => {
+      setShowSettings(false);
+      setPickerEntry(null);
+      setTab('history');
+      setQuery('');
+      window.clipstack.hideTooltip();
+    });
+
+    return () => {
+      unsubscribeHidden();
+      unsubscribeWillHide();
     };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   return (
@@ -75,7 +96,7 @@ const App: React.FC = () => {
       </div>
 
       {showSettings ? (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel onClose={() => { setShowSettings(false); applyTheme(); }} />
       ) : (
         <>
           <div className="tab-bar">

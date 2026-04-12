@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, app, dialog } from 'electron';
+import { ipcMain, BrowserWindow, app, dialog, screen } from 'electron';
 import fs from 'fs';
 import { IPC } from '../shared/types';
 import type { Settings } from '../shared/types';
@@ -7,9 +7,11 @@ import { ClipboardService } from './clipboard';
 import { loadSettings, saveSettings } from './settings';
 import { getGroups, createGroup, deleteGroup, renameGroup, addEntryToGroup, removeEntryFromGroup } from './groups';
 import type { ClipboardEntryType } from '../shared/types';
+import { hideWindowGracefully } from './index';
 
 export function registerIpcHandlers(
   window: BrowserWindow,
+  tooltipWindow: BrowserWindow,
   clipboardService: ClipboardService,
   onSettingsChange: (settings: Settings) => void
 ): void {
@@ -24,10 +26,10 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.PASTE_ENTRY, (_event, id: number, content: string) => {
     incrementUsage(id);
     clipboardService.writeToClipboard(content);
-    window.hide();
+    hideWindowGracefully(window);
 
-    // Simulate Cmd+V after a short delay so the target app receives focus first
-    setTimeout(() => simulatePaste(), 150);
+    // Simulate Cmd+V after the window has fully hidden
+    setTimeout(() => simulatePaste(), 230);
   });
 
   ipcMain.handle(IPC.DELETE_ENTRY, (_event, id: number) => {
@@ -43,7 +45,7 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle(IPC.HIDE_WINDOW, () => {
-    window.hide();
+    hideWindowGracefully(window);
   });
 
   ipcMain.handle(IPC.GET_SETTINGS, () => {
@@ -99,10 +101,65 @@ export function registerIpcHandlers(
     removeEntryFromGroup(groupId, entryId)
   );
 
+  ipcMain.handle(IPC.SHOW_TOOLTIP, async (_event, text: string) => {
+    if (window.getOpacity() < 1) return;
+    const cursor = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursor);
+    const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
+
+    const tooltipWidth = 420;
+    const maxHeight = 460;
+    const offsetX = 14;
+
+    const escaped = JSON.stringify(text);
+    const contentHeight: number = await tooltipWindow.webContents.executeJavaScript(`
+      (function() {
+        var el = document.getElementById('wrap');
+        el.style.width = '${tooltipWidth}px';
+        el.textContent = ${escaped};
+        return Math.min(el.scrollHeight, ${maxHeight});
+      })()
+    `);
+
+    tooltipWindow.setSize(tooltipWidth, contentHeight);
+
+    // Show to the right; flip left if not enough space
+    const spaceRight = (dx + dw) - (cursor.x + offsetX);
+    let x = spaceRight >= tooltipWidth
+      ? cursor.x + offsetX
+      : cursor.x - tooltipWidth - offsetX;
+
+    // Hard clamp to always stay within screen
+    x = Math.max(dx, Math.min(x, dx + dw - tooltipWidth));
+
+    // Align top with cursor; push up if it would overflow bottom
+    let y = cursor.y;
+    if (y + contentHeight > dy + dh) y = dy + dh - contentHeight;
+    y = Math.max(dy, y);
+
+    tooltipWindow.setPosition(Math.round(x), Math.round(y));
+    tooltipWindow.showInactive();
+  });
+
+  ipcMain.handle(IPC.HIDE_TOOLTIP, () => {
+    tooltipWindow.hide();
+  });
+
+  ipcMain.handle(IPC.BROWSE_FOR_APP, async () => {
+    const { filePaths, canceled } = await dialog.showOpenDialog(window, {
+      defaultPath: '/Applications',
+      properties: ['openFile'],
+      filters: [{ name: 'Applications', extensions: ['app'] }],
+    });
+    if (canceled || !filePaths[0]) return null;
+    const name = filePaths[0].split('/').pop()?.replace(/\.app$/, '') ?? null;
+    return name;
+  });
+
   ipcMain.handle(IPC.PASTE_GROUP_ENTRY, (_event, content: string) => {
     clipboardService.writeToClipboard(content);
-    window.hide();
-    setTimeout(() => simulatePaste(), 150);
+    hideWindowGracefully(window);
+    setTimeout(() => simulatePaste(), 230);
   });
 }
 

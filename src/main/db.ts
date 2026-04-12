@@ -3,6 +3,7 @@ import path from 'path';
 import { app } from 'electron';
 import type { ClipboardEntry } from '../shared/types';
 import { loadSettings } from './settings';
+import { encrypt, decrypt, isAvailable } from './encrypting';
 
 // Pure JSON persistence — no native modules, works with any Node version.
 
@@ -22,7 +23,19 @@ function loadStore(): Store {
 
   try {
     const raw = fs.readFileSync(getStorePath(), 'utf-8');
-    _store = JSON.parse(raw) as Store;
+    if (isAvailable()) {
+      const decrypted = decrypt(raw);
+      if (decrypted !== null) {
+        // Successfully decrypted — normal encrypted read
+        _store = JSON.parse(decrypted) as Store;
+      } else {
+        // Migration: file is still plain JSON — parse and re-save encrypted
+        _store = JSON.parse(raw) as Store;
+        saveStore();
+      }
+    } else {
+      _store = JSON.parse(raw) as Store;
+    }
   } catch {
     _store = { entries: [], nextId: 1 };
   }
@@ -32,7 +45,9 @@ function loadStore(): Store {
 
 function saveStore(): void {
   if (!_store) return;
-  fs.writeFileSync(getStorePath(), JSON.stringify(_store), 'utf-8');
+  const json = JSON.stringify(_store);
+  const data = isAvailable() ? encrypt(json) : json;
+  fs.writeFileSync(getStorePath(), data, 'utf-8');
 }
 
 export function insertEntry(content: string, type: ClipboardEntry['type']): ClipboardEntry | null {

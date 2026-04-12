@@ -52,6 +52,17 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     });
   }, []);
 
+  // Apply theme immediately when it changes
+  useEffect(() => {
+    if (loading) return;
+    const root = document.documentElement;
+    if (settings.theme === 'system') {
+      root.removeAttribute('data-theme');
+    } else {
+      root.setAttribute('data-theme', settings.theme);
+    }
+  }, [settings.theme, loading]);
+
   // Autosave with 600ms debounce
   useEffect(() => {
     if (loading) return;
@@ -113,6 +124,34 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     <div className="settings-panel">
       <div className="settings-section">
         <div className="settings-section-label">General</div>
+        <div className="settings-row">
+          <span className="settings-row-label">Theme</span>
+          <div className="segmented">
+            {(['light', 'dark', 'system'] as const).map((opt) => (
+              <button
+                key={opt}
+                className={`segmented-btn ${settings.theme === opt ? 'active' : ''}`}
+                onClick={() => setSettings((s) => ({ ...s, theme: opt }))}
+              >
+                {opt.charAt(0).toUpperCase() + opt.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="settings-row">
+          <span className="settings-row-label">Popup size</span>
+          <div className="segmented">
+            {(['compact', 'normal', 'large'] as const).map((opt) => (
+              <button
+                key={opt}
+                className={`segmented-btn ${settings.popupSize === opt ? 'active' : ''}`}
+                onClick={() => setSettings((s) => ({ ...s, popupSize: opt }))}
+              >
+                {opt.charAt(0).toUpperCase() + opt.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="settings-row">
           <span className="settings-row-label">Launch at login</span>
           <button
@@ -197,6 +236,31 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
             <option value={500}>Normal (500ms)</option>
             <option value={1000}>Slow (1s)</option>
           </select>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label">Privacy</div>
+        <div className="settings-row-label" style={{ padding: '0 0 6px' }}>Ignore apps</div>
+        {settings.ignoredApps.map((app, i) => (
+          <div key={i} className="ignored-app-row">
+            <span className="ignored-app-name">{app}</span>
+            <button
+              className="ignored-app-remove"
+              onClick={() => setSettings((s) => ({ ...s, ignoredApps: s.ignoredApps.filter((_, j) => j !== i) }))}
+            >✕</button>
+          </div>
+        ))}
+        <div className="ignored-app-add">
+          <button
+            className="ignored-app-add-btn"
+            onClick={async () => {
+              const name = await window.clipstack.browseForApp();
+              if (name && !settings.ignoredApps.includes(name)) {
+                setSettings((s) => ({ ...s, ignoredApps: [...s.ignoredApps, name] }));
+              }
+            }}
+          >+ Add app from Applications…</button>
         </div>
       </div>
 

@@ -10,7 +10,49 @@ const isDev = process.env.NODE_ENV === 'development';
 
 let tray: Tray | null = null;
 let window: BrowserWindow | null = null;
+let tooltipWindow: BrowserWindow | null = null;
 let clipboardService: ClipboardService | null = null;
+
+/**
+ * Gracefully hide the window:
+ * 1. Set opacity to 0 (transparent but still composited — Chromium still paints)
+ * 2. Tell renderer to reset state (it re-renders while transparent)
+ * 3. After a short delay (enough for React to commit), actually hide + restore opacity
+ */
+export function hideWindowGracefully(win: BrowserWindow): void {
+  if (!win.isVisible()) return;
+  tooltipWindow?.hide();
+  win.setOpacity(0);
+  win.webContents.send('window-will-hide');
+  setTimeout(() => {
+    win.hide();
+    win.setOpacity(1);
+  }, 80);
+}
+
+function createTooltipWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 340,
+    height: 120,
+    show: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    resizable: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+  win.setIgnoreMouseEvents(true);
+  const htmlPath = isDev
+    ? path.join(__dirname, '../../../assets/tooltip.html')
+    : path.join(app.getAppPath(), 'assets', 'tooltip.html');
+  win.loadFile(htmlPath);
+  return win;
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -40,11 +82,15 @@ function createWindow(): BrowserWindow {
   if (isDev) win.webContents.openDevTools({ mode: 'detach' });
 
   win.on('blur', () => {
-    if (loadSettings().dismissOnBlur) win.hide();
+    tooltipWindow?.hide();
+    if (!loadSettings().dismissOnBlur) return;
+    setTimeout(() => {
+      if (!win.isFocused()) hideWindowGracefully(win);
+    }, 100);
   });
 
   win.on('hide', () => {
-    win.webContents.send('window-hidden');
+    tooltipWindow?.hide();
   });
 
   return win;
@@ -52,10 +98,10 @@ function createWindow(): BrowserWindow {
 
 function createTray(win: BrowserWindow): Tray {
   const iconPath = isDev
-    ? path.join(__dirname, '../../../assets/icon.png')
-    : path.join(process.resourcesPath, 'app.asar', 'assets', 'icon.png');
-  const rawIcon = nativeImage.createFromPath(iconPath);
-  const icon = rawIcon.isEmpty() ? nativeImage.createEmpty() : rawIcon.resize({ width: 16, height: 16 });
+    ? path.join(__dirname, '../../../assets/trayTemplate.png')
+    : path.join(process.resourcesPath, 'app.asar', 'assets', 'trayTemplate.png');
+  const icon = nativeImage.createFromPath(iconPath);
+  icon.setTemplateImage(true);
   const t = new Tray(icon);
 
   const contextMenu = Menu.buildFromTemplate([
@@ -71,11 +117,15 @@ function createTray(win: BrowserWindow): Tray {
   return t;
 }
 
+const POPUP_HEIGHTS: Record<string, number> = { compact: 400, normal: 600, large: 800 };
+
 function toggleWindow(win: BrowserWindow): void {
   if (win.isVisible()) {
-    win.hide();
+    hideWindowGracefully(win);
     return;
   }
+  const { popupSize } = loadSettings();
+  win.setSize(420, POPUP_HEIGHTS[popupSize] ?? 600);
   positionWindow(win);
   win.show();
   win.focus();
@@ -111,18 +161,23 @@ function registerShortcuts(win: BrowserWindow, hotkey: string): void {
 }
 
 app.whenReady().then(() => {
+  const dockIconPath = isDev
+    ? path.join(__dirname, '../../../assets/icon.png')
+    : path.join(process.resourcesPath, 'app.asar', 'assets', 'icon.png');
+  app.dock.setIcon(dockIconPath);
   app.dock.hide();
 
   const settings = loadSettings();
 
   window = createWindow();
+  tooltipWindow = createTooltipWindow();
   tray = createTray(window);
 
   clipboardService = new ClipboardService((entry: ClipboardEntry) => {
     window?.webContents.send(IPC.CLIPBOARD_UPDATED, entry);
   }, settings.pollIntervalMs);
 
-  registerIpcHandlers(window, clipboardService, (newSettings) => {
+  registerIpcHandlers(window, tooltipWindow, clipboardService, (newSettings) => {
     registerShortcuts(window!, newSettings.hotkey);
   });
 

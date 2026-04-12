@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import type { ClipboardEntry } from '../../shared/types';
 
 interface ClipboardItemProps {
@@ -26,14 +26,31 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
   onAddToGroup,
 }) => {
   const [hovered, setHovered] = useState(false);
+  const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isPinned = entry.pinnedAt !== null;
+  const isLong = entry.content.length > 80;
+
+  const handleMouseEnter = () => setHovered(true);
+  const handleMouseLeave = () => {
+    setHovered(false);
+    if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+    window.clipstack.hideTooltip();
+  };
+  const handleMouseMove = () => {
+    if (!isLong) return;
+    if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+    tooltipTimer.current = setTimeout(() => {
+      window.clipstack.showTooltip(entry.content);
+    }, 500);
+  };
 
   return (
     <div
       className={`clipboard-item ${isPinned ? 'pinned' : ''}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onMouseMove={handleMouseMove}
       onClick={() => onPaste(entry)}
     >
       <div className="item-content">

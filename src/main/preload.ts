@@ -20,6 +20,9 @@ const IPC = {
   ADD_TO_GROUP: 'add-to-group',
   REMOVE_FROM_GROUP: 'remove-from-group',
   PASTE_GROUP_ENTRY: 'paste-group-entry',
+  BROWSE_FOR_APP: 'browse-for-app',
+  SHOW_TOOLTIP: 'show-tooltip',
+  HIDE_TOOLTIP: 'hide-tooltip',
   CLIPBOARD_UPDATED: 'clipboard-updated',
 } as const;
 
@@ -78,11 +81,27 @@ contextBridge.exposeInMainWorld('clipstack', {
   pasteGroupEntry: (content: string) =>
     ipcRenderer.invoke(IPC.PASTE_GROUP_ENTRY, content),
 
+  browseForApp: () =>
+    ipcRenderer.invoke(IPC.BROWSE_FOR_APP),
+
+  showTooltip: (text: string) =>
+    ipcRenderer.invoke(IPC.SHOW_TOOLTIP, text),
+
+  hideTooltip: () =>
+    ipcRenderer.invoke(IPC.HIDE_TOOLTIP),
+
   onWindowHidden: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on('window-hidden', handler);
     return () => ipcRenderer.removeListener('window-hidden', handler);
   },
+
+  onWindowWillHide: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('window-will-hide', handler);
+    return () => ipcRenderer.removeListener('window-will-hide', handler);
+  },
+
 
   onClipboardUpdated: (callback: (entry: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, entry: unknown) => callback(entry);

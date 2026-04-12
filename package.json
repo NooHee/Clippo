@@ -1,6 +1,6 @@
 {
   "name": "clipstack",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Clipboard history manager for macOS",
   "main": "dist/main/main/index.js",
   "scripts": {
