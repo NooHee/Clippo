@@ -53,7 +53,11 @@ export function useClipboardHistory(): UseClipboardHistory {
   }, []);
 
   const paste = useCallback((entry: ClipboardEntry) => {
-    window.clipstack.pasteEntry(entry.id, entry.content);
+    if (entry.type === 'image' && entry.imageName) {
+      window.clipstack.pasteImage(entry.imageName);
+    } else {
+      window.clipstack.pasteEntry(entry.id, entry.content);
+    }
   }, []);
 
   const remove = useCallback(async (id: number) => {

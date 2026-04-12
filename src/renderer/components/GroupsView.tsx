@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { ArrowLeft, Trash2, Folder, Plus, Trash, X } from 'lucide-react';
 import type { ClipboardGroup, GroupEntry } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
+import { ImagePreview } from './ImagePreview';
 
 export const GroupsView: React.FC = () => {
   const { translate } = useLocalization();
@@ -52,8 +53,12 @@ export const GroupsView: React.FC = () => {
     load();
   };
 
-  const handlePaste = (content: string) => {
-    window.clipstack.pasteGroupEntry(content);
+  const handlePaste = (entry: GroupEntry) => {
+    if (entry.type === 'image' && entry.imageName) {
+      window.clipstack.pasteImage(entry.imageName);
+    } else {
+      window.clipstack.pasteGroupEntry(entry.content);
+    }
   };
 
   const handleRemoveEntry = async (groupId: number, entryId: number) => {
@@ -116,7 +121,7 @@ export const GroupsView: React.FC = () => {
               <GroupEntryItem
                 key={entry.id}
                 entry={entry}
-                onPaste={() => handlePaste(entry.content)}
+                onPaste={() => handlePaste(entry)}
                 onRemove={() => handleRemoveEntry(activeGroup.id, entry.id)}
               />
             ))}
@@ -186,7 +191,7 @@ export const GroupsView: React.FC = () => {
 
 const GroupEntryItem: React.FC<{
   entry: GroupEntry;
-  onPaste: () => void;
+  onPaste: (entry: GroupEntry) => void;
   onRemove: () => void;
 }> = ({ entry, onPaste, onRemove }) => {
   const { translate } = useLocalization();
@@ -221,14 +226,18 @@ const GroupEntryItem: React.FC<{
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onMouseMove={handleMouseMove}
-      onClick={onPaste}
+      onClick={() => onPaste(entry)}
     >
-      <div className="item-content">
-        <p ref={previewRef} className="item-preview">{entry.preview}</p>
-        <span className="item-time">
-          {new Date(entry.addedAt).toLocaleDateString()}
-        </span>
-      </div>
+      {entry.type === 'image' && entry.imageName ? (
+        <ImagePreview imageName={entry.imageName} createdAt={entry.addedAt} />
+      ) : (
+        <div className="item-content">
+          <p ref={previewRef} className="item-preview">{entry.preview}</p>
+          <span className="item-time">
+            {new Date(entry.addedAt).toLocaleDateString()}
+          </span>
+        </div>
+      )}
       {hovered && (
         <div
           className="item-actions"

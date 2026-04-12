@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { FolderPlus, Pin, Trash2 } from 'lucide-react';
 import type { ClipboardEntry } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
+import { ImagePreview } from './ImagePreview';
 
 interface ClipboardItemProps {
   entry: ClipboardEntry;
@@ -62,10 +63,14 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
       onMouseMove={handleMouseMove}
       onClick={() => onPaste(entry)}
     >
-      <div className="item-content">
-        <p ref={previewRef} className="item-preview">{entry.preview}</p>
-        <span className="item-time">{formatTimeAgo(entry.createdAt)}</span>
-      </div>
+      {entry.type === 'image' && entry.imageName ? (
+        <ImagePreview imageName={entry.imageName} createdAt={entry.createdAt} />
+      ) : (
+        <div className="item-content">
+          <p ref={previewRef} className="item-preview">{entry.preview}</p>
+          <span className="item-time">{formatTimeAgo(entry.createdAt)}</span>
+        </div>
+      )}
 
       {hovered && (
         <div

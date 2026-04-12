@@ -8,6 +8,7 @@ import { loadSettings, saveSettings } from './settings';
 import { getGroups, createGroup, deleteGroup, renameGroup, addEntryToGroup, removeEntryFromGroup } from './groups';
 import type { ClipboardEntryType } from '../shared/types';
 import { hideWindowGracefully } from './index';
+import { pasteImageToClipboard, getImagePath, getThumbnailPath } from './imageHandler';
 
 export function registerIpcHandlers(
   window: BrowserWindow,
@@ -93,8 +94,8 @@ export function registerIpcHandlers(
 
   ipcMain.handle(
     IPC.ADD_TO_GROUP,
-    (_event, groupId: number, content: string, type: ClipboardEntryType, preview: string) =>
-      addEntryToGroup(groupId, content, type, preview)
+    (_event, groupId: number, content: string, type: ClipboardEntryType, preview: string, imageName?: string) =>
+      addEntryToGroup(groupId, content, type, preview, imageName)
   );
 
   ipcMain.handle(IPC.REMOVE_FROM_GROUP, (_event, groupId: number, entryId: number) =>
@@ -242,6 +243,31 @@ export function registerIpcHandlers(
         errors: [e instanceof Error ? e.message : 'unknown error'],
       };
     }
+  });
+
+  ipcMain.handle(IPC.GET_IMAGE_PATH, (_event, imageName: string) => {
+    try {
+      const imagePath = getThumbnailPath(imageName);
+      const exists = fs.existsSync(imagePath);
+      if (!exists) {
+        return getImagePath(imageName);
+      }
+      const imageData = fs.readFileSync(imagePath);
+      const base64 = imageData.toString('base64');
+      return `data:image/png;base64,${base64}`;
+    } catch (e) {
+      console.error('[ClipStack] Failed to load image:', e);
+      return null;
+    }
+  });
+
+  ipcMain.handle(IPC.PASTE_IMAGE, (_event, imageName: string) => {
+    const success = pasteImageToClipboard(imageName);
+    if (success) {
+      hideWindowGracefully(window);
+      setTimeout(() => simulatePaste(), 230);
+    }
+    return { success };
   });
 }
 

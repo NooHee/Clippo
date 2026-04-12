@@ -8,6 +8,7 @@ export interface ClipboardEntry {
   createdAt: number;
   pinnedAt: number | null;
   usageCount: number;
+  imageName?: string; // For image type entries, stores the image filename
 }
 
 export interface Settings {
@@ -40,6 +41,7 @@ export interface GroupEntry {
   type: ClipboardEntryType;
   preview: string;
   addedAt: number;
+  imageName?: string; // For image type entries, stores the image filename
 }
 
 export interface ClipboardGroup {
@@ -64,6 +66,8 @@ export interface IpcChannels {
   IMPORT_SETTINGS: 'import-settings';
   EXPORT_HISTORY: 'export-history';
   IMPORT_HISTORY: 'import-history';
+  GET_IMAGE_PATH: 'get-image-path';
+  PASTE_IMAGE: 'paste-image';
   GET_GROUPS: 'get-groups';
   CREATE_GROUP: 'create-group';
   DELETE_GROUP: 'delete-group';
@@ -93,6 +97,8 @@ export const IPC: IpcChannels = {
   IMPORT_SETTINGS: 'import-settings',
   EXPORT_HISTORY: 'export-history',
   IMPORT_HISTORY: 'import-history',
+  GET_IMAGE_PATH: 'get-image-path',
+  PASTE_IMAGE: 'paste-image',
   GET_GROUPS: 'get-groups',
   CREATE_GROUP: 'create-group',
   DELETE_GROUP: 'delete-group',
