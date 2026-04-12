@@ -123,6 +123,23 @@ export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory }) => {
     setTimeout(() => setImportExportMsg(null), 2000);
   };
 
+  const handleExportHistory = async () => {
+    const result = await window.clipstack.exportHistory();
+    if (result.success) {
+      setImportExportMsg(translate('settings.historyExported'));
+      setTimeout(() => setImportExportMsg(null), 2000);
+    }
+  };
+
+  const handleImportHistory = async () => {
+    const result = await window.clipstack.importHistory();
+    if (!result.success) return;
+    setImportExportMsg(
+      `${translate('settings.historyImported')}: ${result.imported} ${result.imported === 1 ? 'item' : 'items'}${result.duplicates > 0 ? `, ${result.duplicates} duplicates skipped` : ''}${result.errors.length > 0 ? `, ${result.errors.length} errors` : ''}`
+    );
+    setTimeout(() => setImportExportMsg(null), 3000);
+  };
+
   if (loading) return null;
 
   return (
@@ -270,9 +287,19 @@ export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory }) => {
 
       <div className="settings-section">
         <div className="settings-section-label">{translate('settings.sections.backup')}</div>
-        <div className="settings-import-export">
-          <button className="settings-io-btn" onClick={handleImport}>{translate('settings.import')}</button>
-          <button className="settings-io-btn" onClick={handleExport}>{translate('settings.export')}</button>
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Settings</div>
+          <div className="settings-import-export">
+            <button className="settings-io-btn" onClick={handleImport}>{translate('settings.import')}</button>
+            <button className="settings-io-btn" onClick={handleExport}>{translate('settings.export')}</button>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Clipboard History</div>
+          <div className="settings-import-export">
+            <button className="settings-io-btn" onClick={handleImportHistory}>{translate('settings.importHistory')}</button>
+            <button className="settings-io-btn" onClick={handleExportHistory}>{translate('settings.exportHistory')}</button>
+          </div>
         </div>
         {importExportMsg && <p className="settings-io-msg">{importExportMsg}</p>}
       </div>

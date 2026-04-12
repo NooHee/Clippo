@@ -12,6 +12,8 @@ interface ClipStackBridge {
   saveSettings: (settings: Settings) => Promise<void>;
   exportSettings: () => Promise<{ success: boolean }>;
   importSettings: () => Promise<Partial<Settings> | null>;
+  exportHistory: () => Promise<{ success: boolean }>;
+  importHistory: () => Promise<{ success: boolean; imported: number; duplicates: number; errors: string[] }>;
   getGroups: () => Promise<ClipboardGroup[]>;
   createGroup: (name: string) => Promise<ClipboardGroup>;
   deleteGroup: (id: number) => Promise<void>;

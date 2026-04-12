@@ -62,6 +62,8 @@ export interface IpcChannels {
   SAVE_SETTINGS: 'save-settings';
   EXPORT_SETTINGS: 'export-settings';
   IMPORT_SETTINGS: 'import-settings';
+  EXPORT_HISTORY: 'export-history';
+  IMPORT_HISTORY: 'import-history';
   GET_GROUPS: 'get-groups';
   CREATE_GROUP: 'create-group';
   DELETE_GROUP: 'delete-group';
@@ -89,6 +91,8 @@ export const IPC: IpcChannels = {
   SAVE_SETTINGS: 'save-settings',
   EXPORT_SETTINGS: 'export-settings',
   IMPORT_SETTINGS: 'import-settings',
+  EXPORT_HISTORY: 'export-history',
+  IMPORT_HISTORY: 'import-history',
   GET_GROUPS: 'get-groups',
   CREATE_GROUP: 'create-group',
   DELETE_GROUP: 'delete-group',

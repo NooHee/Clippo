@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, app, dialog, screen } from 'electron';
 import fs from 'fs';
 import { IPC } from '../shared/types';
 import type { Settings } from '../shared/types';
-import { getHistory, deleteEntry, togglePin, clearHistory, incrementUsage } from './db';
+import { getHistory, deleteEntry, togglePin, clearHistory, incrementUsage, insertEntry } from './db';
 import { ClipboardService } from './clipboard';
 import { loadSettings, saveSettings } from './settings';
 import { getGroups, createGroup, deleteGroup, renameGroup, addEntryToGroup, removeEntryFromGroup } from './groups';
@@ -160,6 +160,88 @@ export function registerIpcHandlers(
     clipboardService.writeToClipboard(content);
     hideWindowGracefully(window);
     setTimeout(() => simulatePaste(), 230);
+  });
+
+  ipcMain.handle(IPC.EXPORT_HISTORY, async () => {
+    const { filePath, canceled } = await dialog.showSaveDialog(window, {
+      defaultPath: 'clipstack-history.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+    if (canceled || !filePath) return { success: false };
+    const history = getHistory();
+    fs.writeFileSync(filePath, JSON.stringify(history, null, 2), 'utf-8');
+    return { success: true };
+  });
+
+  ipcMain.handle(IPC.IMPORT_HISTORY, async () => {
+    const { filePaths, canceled } = await dialog.showOpenDialog(window, {
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || !filePaths[0]) return { success: false, imported: 0, duplicates: 0, errors: [] };
+
+    try {
+      const raw = fs.readFileSync(filePaths[0], 'utf-8');
+      const imported = JSON.parse(raw) as unknown[];
+
+      // Validate and import with duplicate detection
+      if (!Array.isArray(imported)) {
+        return { success: false, imported: 0, duplicates: 0, errors: ['Invalid file format: expected array'] };
+      }
+
+      const history = getHistory();
+      const existingContents = new Set(history.map((h: any) => h.content));
+      let importedCount = 0;
+      let duplicateCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < imported.length; i++) {
+        try {
+          const item = imported[i];
+
+          // Validate structure
+          if (!item || typeof item !== 'object') {
+            errors.push(`Item ${i}: invalid structure`);
+            continue;
+          }
+
+          const { content, type, preview } = item as any;
+          if (!content || !type || !preview) {
+            errors.push(`Item ${i}: missing required fields`);
+            continue;
+          }
+
+          if (!['text', 'image', 'file'].includes(type)) {
+            errors.push(`Item ${i}: invalid type "${type}"`);
+            continue;
+          }
+
+          // Check for duplicates
+          if (existingContents.has(content)) {
+            duplicateCount++;
+            continue;
+          }
+
+          // Add to history
+          const result = insertEntry(content, type as ClipboardEntryType);
+          if (result) {
+            existingContents.add(content);
+            importedCount++;
+          }
+        } catch (e) {
+          errors.push(`Item ${i}: ${e instanceof Error ? e.message : 'unknown error'}`);
+        }
+      }
+
+      return { success: true, imported: importedCount, duplicates: duplicateCount, errors };
+    } catch (e) {
+      return {
+        success: false,
+        imported: 0,
+        duplicates: 0,
+        errors: [e instanceof Error ? e.message : 'unknown error'],
+      };
+    }
   });
 }
 
