@@ -20,6 +20,7 @@ let clipboardService: ClipboardService | null = null;
  * 3. After a short delay (enough for React to commit), actually hide + restore opacity
  */
 export function hideWindowGracefully(win: BrowserWindow): void {
+  //TODO To fix later, the problem is the view is refreshing after opening the popup and not before
   if (!win.isVisible()) return;
   tooltipWindow?.hide();
   win.setOpacity(0);

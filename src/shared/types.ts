@@ -20,6 +20,7 @@ export interface Settings {
   theme: 'light' | 'dark' | 'system';
   popupSize: 'compact' | 'normal' | 'large';
   ignoredApps: string[];
+  language: 'en' | 'fr';
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -32,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   popupSize: 'normal',
   ignoredApps: [],
+  language: 'en',
 };
 
 export interface GroupEntry {

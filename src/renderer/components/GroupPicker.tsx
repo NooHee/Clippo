@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ClipboardEntry, ClipboardGroup } from '../../shared/types';
+import { useLocalization } from '../../i18n/useLocalization';
 
 interface Props {
   entry: ClipboardEntry;
@@ -7,10 +8,11 @@ interface Props {
 }
 
 export const GroupPicker: React.FC<Props> = ({ entry, onClose }) => {
+  const { translate } = useLocalization();
   const [groups, setGroups] = useState<ClipboardGroup[]>([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [added, setAdded] = useState<number | null>(null); // group id just added to
+  const [added, setAdded] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -37,7 +39,7 @@ export const GroupPicker: React.FC<Props> = ({ entry, onClose }) => {
     <>
       <div className="group-picker-backdrop" onClick={onClose} />
       <div className="group-picker">
-        <div className="group-picker-header">Add to group</div>
+        <div className="group-picker-header">{translate('groupPicker.title')}</div>
 
         {groups.length > 0 && (
           <div className="group-picker-list">
@@ -67,7 +69,7 @@ export const GroupPicker: React.FC<Props> = ({ entry, onClose }) => {
             <input
               ref={inputRef}
               className="group-new-input"
-              placeholder="Group name…"
+              placeholder={translate('groupPicker.newGroupPlaceholder')}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
@@ -82,7 +84,7 @@ export const GroupPicker: React.FC<Props> = ({ entry, onClose }) => {
             <svg viewBox="0 0 16 16" fill="none">
               <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            New group
+            {translate('groupPicker.newGroup')}
           </button>
         )}
       </div>

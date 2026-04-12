@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { ClipboardGroup, GroupEntry } from '../../shared/types';
+import { useLocalization } from '../../i18n/useLocalization';
 
 export const GroupsView: React.FC = () => {
+  const { translate } = useLocalization();
   const [groups, setGroups] = useState<ClipboardGroup[]>([]);
   const [activeGroup, setActiveGroup] = useState<ClipboardGroup | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -14,7 +16,6 @@ export const GroupsView: React.FC = () => {
   const load = async () => {
     const data = await window.clipstack.getGroups();
     setGroups(data);
-    // Keep activeGroup in sync if it was updated
     if (activeGroup) {
       setActiveGroup(data.find((g) => g.id === activeGroup.id) ?? null);
     }
@@ -85,7 +86,7 @@ export const GroupsView: React.FC = () => {
             <span
               className="group-detail-name"
               onClick={() => { setEditingId(activeGroup.id); setEditingName(activeGroup.name); }}
-              title="Click to rename"
+              title={translate('groups.clickToRename')}
             >
               {activeGroup.name}
             </span>
@@ -93,7 +94,7 @@ export const GroupsView: React.FC = () => {
           <button
             className="group-delete-btn"
             onClick={() => handleDelete(activeGroup.id)}
-            title="Delete group"
+            title={translate('groups.deleteGroup')}
           >
             <svg viewBox="0 0 16 16" fill="none">
               <path d="M3 4h10M6 4V3h4v1M5 4v8h6V4H5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -109,8 +110,8 @@ export const GroupsView: React.FC = () => {
               <path d="M16 10V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <path d="M32 10V8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            <p>Empty group</p>
-            <span>Add items from the History tab</span>
+            <p>{translate('groups.emptyGroup')}</p>
+            <span>{translate('groups.emptyGroupHint')}</span>
           </div>
         ) : (
           <div className="clipboard-list">
@@ -136,8 +137,8 @@ export const GroupsView: React.FC = () => {
           <svg viewBox="0 0 48 48" fill="none" className="empty-icon">
             <path d="M6 12a2 2 0 012-2h12l4 4h16a2 2 0 012 2v20a2 2 0 01-2 2H8a2 2 0 01-2-2V12z" stroke="currentColor" strokeWidth="1.5" />
           </svg>
-          <p>No groups yet</p>
-          <span>Create a group to save items permanently</span>
+          <p>{translate('groups.empty')}</p>
+          <span>{translate('groups.emptyHint')}</span>
         </div>
       ) : (
         <div className="clipboard-list">
@@ -161,7 +162,7 @@ export const GroupsView: React.FC = () => {
           <input
             ref={newInputRef}
             className="group-new-input"
-            placeholder="Group name…"
+            placeholder={translate('groups.newGroupPlaceholder')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
@@ -178,7 +179,7 @@ export const GroupsView: React.FC = () => {
           <svg viewBox="0 0 16 16" fill="none">
             <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          New Group
+          {translate('groups.newGroup')}
         </button>
       </div>
     </div>
@@ -190,6 +191,7 @@ const GroupEntryItem: React.FC<{
   onPaste: () => void;
   onRemove: () => void;
 }> = ({ entry, onPaste, onRemove }) => {
+  const { translate } = useLocalization();
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -207,7 +209,11 @@ const GroupEntryItem: React.FC<{
       </div>
       {hovered && (
         <div className="item-actions" onClick={(e) => e.stopPropagation()}>
-          <button className="action-btn delete-btn" onClick={onRemove} title="Remove from group">
+          <button
+            className="action-btn delete-btn"
+            onClick={onRemove}
+            title={translate('groups.removeFromGroup')}
+          >
             <svg viewBox="0 0 20 20" fill="none">
               <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>

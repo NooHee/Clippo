@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useLocalization } from '../i18n/useLocalization';
+import { changeLanguage } from '../i18n';
 import { SearchBar } from './components/SearchBar';
 import { ClipboardList } from './components/ClipboardList';
 import { GroupsView } from './components/GroupsView';
@@ -11,6 +13,7 @@ import './styles.css';
 type Tab = 'history' | 'groups';
 
 const App: React.FC = () => {
+  const { translate } = useLocalization();
   const { entries, query, setQuery, paste, remove, pin, clearAll, loading } = useClipboardHistory();
   const [tab, setTab] = useState<Tab>('history');
   const [showSettings, setShowSettings] = useState(false);
@@ -27,7 +30,16 @@ const App: React.FC = () => {
     });
   }, []);
 
-  useEffect(() => { applyTheme(); }, [applyTheme]);
+  const applyLanguage = useCallback(() => {
+    window.clipstack.getSettings().then((s) => {
+      changeLanguage(s.language);
+    });
+  }, []);
+
+  useEffect(() => {
+    applyTheme();
+    applyLanguage();
+  }, [applyTheme, applyLanguage]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -61,17 +73,17 @@ const App: React.FC = () => {
   return (
     <div className="app">
       <div className="titlebar">
-        <span className="app-name">ClipStack</span>
+        <span className="app-name">{translate('app.name')}</span>
         <div className="titlebar-actions">
           {!showSettings && tab === 'history' && entries.some((e) => e.pinnedAt === null) && (
-            <button className="header-btn" onClick={clearAll} title="Clear unpinned history">
-              Clear
+            <button className="header-btn" onClick={clearAll} title={translate('app.clearTitle')}>
+              {translate('app.clear')}
             </button>
           )}
           <button
             className={`header-btn icon-btn ${showSettings ? 'active' : ''}`}
             onClick={() => setShowSettings((v) => !v)}
-            title="Settings"
+            title={translate('app.settings')}
           >
             <svg viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.4" />
@@ -86,7 +98,7 @@ const App: React.FC = () => {
           <button
             className="header-btn close-btn"
             onClick={() => window.clipstack.hideWindow()}
-            title="Close"
+            title={translate('app.close')}
           >
             <svg viewBox="0 0 16 16" fill="none">
               <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -96,7 +108,7 @@ const App: React.FC = () => {
       </div>
 
       {showSettings ? (
-        <SettingsPanel onClose={() => { setShowSettings(false); applyTheme(); }} />
+        <SettingsPanel onClose={() => { setShowSettings(false); applyTheme(); applyLanguage(); }} />
       ) : (
         <>
           <div className="tab-bar">
@@ -104,13 +116,13 @@ const App: React.FC = () => {
               className={`tab-btn ${tab === 'history' ? 'active' : ''}`}
               onClick={() => setTab('history')}
             >
-              History
+              {translate('app.history')}
             </button>
             <button
               className={`tab-btn ${tab === 'groups' ? 'active' : ''}`}
               onClick={() => setTab('groups')}
             >
-              Groups
+              {translate('app.groups')}
             </button>
           </div>
 
@@ -136,7 +148,7 @@ const App: React.FC = () => {
                 )}
               </div>
               <div className="footer">
-                <span>{entries.length} item{entries.length !== 1 ? 's' : ''}</span>
+                <span>{translate('app.items', { count: entries.length })}</span>
                 <kbd>⌘⇧V</kbd>
               </div>
             </>
