@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { FolderPlus, Pin, Trash2 } from 'lucide-react';
 import type { ClipboardEntry } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
 
@@ -84,10 +85,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
             onClick={() => onAddToGroup(entry)}
             title={translate('actions.addToGroup')}
           >
-            <svg viewBox="0 0 20 20" fill="none">
-              <path d="M3 7a1 1 0 011-1h4l2 2h6a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1V7z" stroke="currentColor" strokeWidth="1.3" />
-              <path d="M10 10v4M8 12h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-            </svg>
+            <FolderPlus size={16} strokeWidth={1.5} />
           </button>
 
           <button
@@ -95,15 +93,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
             onClick={() => onPin(entry.id)}
             title={isPinned ? translate('actions.unpin') : translate('actions.pin')}
           >
-            <svg viewBox="0 0 20 20" fill="none">
-              <path
-                d="M10 2l2 5h5l-4 3 1.5 5L10 12l-4.5 3L7 10 3 7h5L10 2z"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinejoin="round"
-                fill={isPinned ? 'currentColor' : 'none'}
-              />
-            </svg>
+            <Pin size={16} strokeWidth={1.5} fill={isPinned ? 'currentColor' : 'none'} />
           </button>
 
           <button
@@ -111,9 +101,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
             onClick={() => onDelete(entry.id)}
             title={translate('actions.delete')}
           >
-            <svg viewBox="0 0 20 20" fill="none">
-              <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+            <Trash2 size={16} strokeWidth={1.5} />
           </button>
         </div>
       )}

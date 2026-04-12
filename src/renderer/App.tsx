@@ -7,6 +7,7 @@ import { GroupsView } from './components/GroupsView';
 import { GroupPicker } from './components/GroupPicker';
 import { SettingsPanel } from './components/SettingsPanel';
 import { useClipboardHistory } from './hooks/useClipboardHistory';
+import { Settings, X } from 'lucide-react';
 import type { ClipboardEntry } from '../shared/types';
 import './styles.css';
 
@@ -85,24 +86,14 @@ const App: React.FC = () => {
             onClick={() => setShowSettings((v) => !v)}
             title={translate('app.settings')}
           >
-            <svg viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.4" />
-              <path
-                d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-              />
-            </svg>
+            <Settings size={16} strokeWidth={2} />
           </button>
           <button
             className="header-btn close-btn"
             onClick={() => window.clipstack.hideWindow()}
             title={translate('app.close')}
           >
-            <svg viewBox="0 0 16 16" fill="none">
-              <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
+            <X size={16} strokeWidth={2} />
           </button>
         </div>
       </div>
