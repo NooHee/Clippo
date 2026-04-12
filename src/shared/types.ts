@@ -18,7 +18,6 @@ export interface Settings {
   popupPosition: 'tray' | 'mouse';
   dismissOnBlur: boolean;
   theme: 'light' | 'dark' | 'system';
-  popupSize: 'compact' | 'normal' | 'large';
   ignoredApps: string[];
   language: 'en' | 'fr';
 }
@@ -31,7 +30,6 @@ export const DEFAULT_SETTINGS: Settings = {
   popupPosition: 'tray',
   dismissOnBlur: true,
   theme: 'system',
-  popupSize: 'normal',
   ignoredApps: [],
   language: 'en',
 };

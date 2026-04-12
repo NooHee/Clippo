@@ -64,12 +64,6 @@ const fr = {
       en: 'English',
       fr: 'Français',
     },
-    popupSize: {
-      label: 'Taille du popup',
-      compact: 'Compact',
-      normal: 'Normal',
-      large: 'Grand',
-    },
     launchAtLogin: 'Lancer au démarrage',
     popupPosition: {
       label: 'Afficher le popup',
