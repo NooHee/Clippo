@@ -76,11 +76,6 @@ const App: React.FC = () => {
       <div className="titlebar">
         <span className="app-name">{translate('app.name')}</span>
         <div className="titlebar-actions">
-          {!showSettings && tab === 'history' && entries.some((e) => e.pinnedAt === null) && (
-            <button className="header-btn" onClick={clearAll} title={translate('app.clearTitle')}>
-              {translate('app.clear')}
-            </button>
-          )}
           <button
             className={`header-btn icon-btn ${showSettings ? 'active' : ''}`}
             onClick={() => setShowSettings((v) => !v)}
@@ -99,7 +94,7 @@ const App: React.FC = () => {
       </div>
 
       {showSettings ? (
-        <SettingsPanel onClose={() => { setShowSettings(false); applyTheme(); applyLanguage(); }} />
+        <SettingsPanel onClose={() => { setShowSettings(false); applyTheme(); applyLanguage(); }} onClearHistory={clearAll} />
       ) : (
         <>
           <div className="tab-bar">

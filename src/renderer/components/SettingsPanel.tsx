@@ -6,6 +6,7 @@ import { changeLanguage } from '../../i18n';
 
 interface Props {
   onClose: () => void;
+  onClearHistory: () => void;
 }
 
 function formatHotkey(hotkey: string): string {
@@ -37,7 +38,7 @@ function captureHotkey(e: KeyboardEvent): string | null {
   return [...modifiers, key].join('+');
 }
 
-export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
+export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory }) => {
   const { translate } = useLocalization();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [recording, setRecording] = useState(false);
@@ -274,6 +275,23 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
           <button className="settings-io-btn" onClick={handleExport}>{translate('settings.export')}</button>
         </div>
         {importExportMsg && <p className="settings-io-msg">{importExportMsg}</p>}
+      </div>
+
+      <div className="settings-section">
+        <div className="settings-section-label" style={{ color: 'var(--danger)' }}>{translate('settings.sections.danger')}</div>
+        <div className="settings-row">
+          <span className="settings-row-label">{translate('settings.clearHistoryLabel')}</span>
+          <button
+            className="settings-danger-btn"
+            onClick={() => {
+              if (window.confirm(translate('settings.clearHistoryConfirm'))) {
+                onClearHistory();
+              }
+            }}
+          >
+            {translate('settings.clearHistory')}
+          </button>
+        </div>
       </div>
 
       <div className="settings-footer">

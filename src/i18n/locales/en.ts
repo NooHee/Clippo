@@ -52,6 +52,7 @@ const en = {
       history: 'History',
       privacy: 'Privacy',
       backup: 'Backup',
+      danger: 'Danger Zone',
     },
     theme: {
       label: 'Theme',
@@ -92,6 +93,9 @@ const en = {
     exported: 'Exported!',
     saved: '✓ Saved',
     done: 'Done',
+    clearHistoryLabel: 'Clear history',
+    clearHistory: 'Clear all unpinned items',
+    clearHistoryConfirm: 'This will delete all unpinned clipboard history. This action cannot be undone.',
   },
 } as const;
 
