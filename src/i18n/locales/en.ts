@@ -64,12 +64,6 @@ const en = {
       en: 'English',
       fr: 'Français',
     },
-    popupSize: {
-      label: 'Popup size',
-      compact: 'Compact',
-      normal: 'Normal',
-      large: 'Large',
-    },
     launchAtLogin: 'Launch at login',
     popupPosition: {
       label: 'Show popup at',

@@ -156,20 +156,6 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
           </select>
         </div>
         <div className="settings-row">
-          <span className="settings-row-label">{translate('settings.popupSize.label')}</span>
-          <div className="segmented">
-            {(['compact', 'normal', 'large'] as const).map((opt) => (
-              <button
-                key={opt}
-                className={`segmented-btn ${settings.popupSize === opt ? 'active' : ''}`}
-                onClick={() => setSettings((s) => ({ ...s, popupSize: opt }))}
-              >
-                {translate(`settings.popupSize.${opt}`)}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="settings-row">
           <span className="settings-row-label">{translate('settings.launchAtLogin')}</span>
           <button
             className={`toggle ${settings.launchAtLogin ? 'on' : ''}`}

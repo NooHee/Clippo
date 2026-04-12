@@ -59,9 +59,11 @@ function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 420,
     height: 600,
+    minWidth: 300,
+    minHeight: 400,
     show: false,
     frame: false,
-    resizable: false,
+    resizable: true,
     alwaysOnTop: true,
     skipTaskbar: true,
     transparent: true,
@@ -118,15 +120,11 @@ function createTray(win: BrowserWindow): Tray {
   return t;
 }
 
-const POPUP_HEIGHTS: Record<string, number> = { compact: 400, normal: 600, large: 800 };
-
 function toggleWindow(win: BrowserWindow): void {
   if (win.isVisible()) {
     hideWindowGracefully(win);
     return;
   }
-  const { popupSize } = loadSettings();
-  win.setSize(420, POPUP_HEIGHTS[popupSize] ?? 600);
   positionWindow(win);
   win.show();
   win.focus();
