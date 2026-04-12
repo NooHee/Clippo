@@ -17,6 +17,9 @@ export interface Settings {
   pollIntervalMs: number;
   popupPosition: 'tray' | 'mouse';
   dismissOnBlur: boolean;
+  theme: 'light' | 'dark' | 'system';
+  popupSize: 'compact' | 'normal' | 'large';
+  ignoredApps: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -26,6 +29,9 @@ export const DEFAULT_SETTINGS: Settings = {
   pollIntervalMs: 500,
   popupPosition: 'tray',
   dismissOnBlur: true,
+  theme: 'system',
+  popupSize: 'normal',
+  ignoredApps: [],
 };
 
 export interface GroupEntry {
@@ -63,6 +69,9 @@ export interface IpcChannels {
   ADD_TO_GROUP: 'add-to-group';
   REMOVE_FROM_GROUP: 'remove-from-group';
   PASTE_GROUP_ENTRY: 'paste-group-entry';
+  BROWSE_FOR_APP: 'browse-for-app';
+  SHOW_TOOLTIP: 'show-tooltip';
+  HIDE_TOOLTIP: 'hide-tooltip';
 
   // Main → Renderer
   CLIPBOARD_UPDATED: 'clipboard-updated';
@@ -87,5 +96,8 @@ export const IPC: IpcChannels = {
   ADD_TO_GROUP: 'add-to-group',
   REMOVE_FROM_GROUP: 'remove-from-group',
   PASTE_GROUP_ENTRY: 'paste-group-entry',
+  BROWSE_FOR_APP: 'browse-for-app',
+  SHOW_TOOLTIP: 'show-tooltip',
+  HIDE_TOOLTIP: 'hide-tooltip',
   CLIPBOARD_UPDATED: 'clipboard-updated',
 };

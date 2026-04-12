@@ -1,5 +1,7 @@
 import { clipboard } from 'electron';
+import { execSync } from 'child_process';
 import { insertEntry } from './db';
+import { loadSettings } from './settings';
 import type { ClipboardEntry } from '../shared/types';
 
 type OnNewEntryCallback = (entry: ClipboardEntry) => void;
@@ -39,6 +41,22 @@ export class ClipboardService {
     const text = clipboard.readText();
 
     if (!text || text === this.lastText) return;
+
+    const { ignoredApps } = loadSettings();
+    if (ignoredApps.length > 0) {
+      try {
+        const activeApp = execSync(
+          `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`,
+          { timeout: 200 }
+        ).toString().trim();
+        if (ignoredApps.some((a) => activeApp.toLowerCase() === a.toLowerCase())) {
+          this.lastText = text;
+          return;
+        }
+      } catch {
+        // accessibility not granted or timeout — allow the entry
+      }
+    }
 
     this.lastText = text;
 

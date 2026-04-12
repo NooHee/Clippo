@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
 import type { ClipboardGroup, ClipboardEntryType, GroupEntry } from '../shared/types';
+import { encrypt, decrypt, isAvailable } from './encrypting';
 
 interface GroupStore {
   groups: ClipboardGroup[];
@@ -19,7 +20,18 @@ function load(): GroupStore {
   if (_store) return _store;
   try {
     const raw = fs.readFileSync(getPath(), 'utf-8');
-    _store = JSON.parse(raw) as GroupStore;
+    if (isAvailable()) {
+      const decrypted = decrypt(raw);
+      if (decrypted !== null) {
+        _store = JSON.parse(decrypted) as GroupStore;
+      } else {
+        // Migration: plain JSON — parse and re-save encrypted
+        _store = JSON.parse(raw) as GroupStore;
+        save();
+      }
+    } else {
+      _store = JSON.parse(raw) as GroupStore;
+    }
   } catch {
     _store = { groups: [], nextGroupId: 1, nextEntryId: 1 };
   }
@@ -28,7 +40,9 @@ function load(): GroupStore {
 
 function save(): void {
   if (!_store) return;
-  fs.writeFileSync(getPath(), JSON.stringify(_store, null, 2), 'utf-8');
+  const json = JSON.stringify(_store, null, 2);
+  const data = isAvailable() ? encrypt(json) : json;
+  fs.writeFileSync(getPath(), data, 'utf-8');
 }
 
 export function getGroups(): ClipboardGroup[] {
