@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { ArrowLeft, Trash2, Folder, Plus, Trash, X } from 'lucide-react';
 import type { ClipboardGroup, GroupEntry } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
 
@@ -66,9 +67,7 @@ export const GroupsView: React.FC = () => {
       <div className="groups-view">
         <div className="group-detail-header">
           <button className="group-back-btn" onClick={() => setActiveGroup(null)}>
-            <svg viewBox="0 0 16 16" fill="none">
-              <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ArrowLeft size={16} strokeWidth={1.4} />
           </button>
           {editingId === activeGroup.id ? (
             <input
@@ -96,9 +95,7 @@ export const GroupsView: React.FC = () => {
             onClick={() => handleDelete(activeGroup.id)}
             title={translate('groups.deleteGroup')}
           >
-            <svg viewBox="0 0 16 16" fill="none">
-              <path d="M3 4h10M6 4V3h4v1M5 4v8h6V4H5z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <Trash size={15} strokeWidth={1.3} />
           </button>
         </div>
 
@@ -144,9 +141,7 @@ export const GroupsView: React.FC = () => {
         <div className="clipboard-list">
           {groups.map((g) => (
             <div key={g.id} className="group-row" onClick={() => setActiveGroup(g)}>
-              <svg className="group-row-icon" viewBox="0 0 16 16" fill="none">
-                <path d="M2 5a1 1 0 011-1h4l2 2h5a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V5z" stroke="currentColor" strokeWidth="1.2" fill="none" />
-              </svg>
+              <Folder className="group-row-icon" size={15} strokeWidth={1.2} />
               <div className="group-row-content">
                 <span className="group-row-name">{g.name}</span>
                 {g.entries.length > 0 && (
@@ -181,9 +176,7 @@ export const GroupsView: React.FC = () => {
 
       <div className="groups-footer">
         <button className="group-new-btn" onClick={() => setIsCreating(true)}>
-          <svg viewBox="0 0 16 16" fill="none">
-            <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+          <Plus size={13} strokeWidth={1.5} />
           {translate('groups.newGroup')}
         </button>
       </div>
@@ -254,9 +247,7 @@ const GroupEntryItem: React.FC<{
             onClick={onRemove}
             title={translate('groups.removeFromGroup')}
           >
-            <svg viewBox="0 0 20 20" fill="none">
-              <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
+            <Trash2 size={16} strokeWidth={1.5} />
           </button>
         </div>
       )}

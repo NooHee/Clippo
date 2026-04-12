@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import { Search, X } from 'lucide-react';
 import { useLocalization } from '../../i18n/useLocalization';
 
 interface SearchBarProps {
@@ -17,10 +18,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange, onClear }
 
   return (
     <div className="search-bar">
-      <svg className="search-icon" viewBox="0 0 20 20" fill="none">
-        <circle cx="9" cy="9" r="6" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M13.5 13.5L17 17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
+      <Search className="search-icon" size={16} strokeWidth={1.5} />
 
       <input
         ref={inputRef}
@@ -41,9 +39,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange, onClear }
 
       {value && (
         <button className="clear-btn" onClick={onClear} aria-label={translate('app.clear')}>
-          <svg viewBox="0 0 20 20" fill="none">
-            <path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
+          <X size={16} strokeWidth={1.5} />
         </button>
       )}
     </div>
