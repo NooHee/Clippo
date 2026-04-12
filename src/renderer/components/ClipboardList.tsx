@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ClipboardEntry } from '../../shared/types';
 import { ClipboardItem } from './ClipboardItem';
+import { useLocalization } from '../../i18n/useLocalization';
 
 interface ClipboardListProps {
   entries: ClipboardEntry[];
@@ -19,6 +20,8 @@ export const ClipboardList: React.FC<ClipboardListProps> = ({
   onPin,
   onAddToGroup,
 }) => {
+  const { translate } = useLocalization();
+
   if (loading) {
     return (
       <div className="empty-state">
@@ -35,8 +38,8 @@ export const ClipboardList: React.FC<ClipboardListProps> = ({
           <path d="M18 6v2a2 2 0 002 2h8a2 2 0 002-2V6" stroke="currentColor" strokeWidth="1.5" />
           <path d="M16 20h16M16 27h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
-        <p>Nothing here yet</p>
-        <span>Copy something to get started</span>
+        <p>{translate('history.empty')}</p>
+        <span>{translate('history.emptyHint')}</span>
       </div>
     );
   }
@@ -48,7 +51,7 @@ export const ClipboardList: React.FC<ClipboardListProps> = ({
     <div className="clipboard-list">
       {pinned.length > 0 && (
         <div className="section">
-          <div className="section-label">Pinned</div>
+          <div className="section-label">{translate('history.pinned')}</div>
           {pinned.map((entry) => (
             <ClipboardItem
               key={entry.id}
@@ -64,7 +67,7 @@ export const ClipboardList: React.FC<ClipboardListProps> = ({
 
       {unpinned.length > 0 && (
         <div className="section">
-          {pinned.length > 0 && <div className="section-label">Recent</div>}
+          {pinned.length > 0 && <div className="section-label">{translate('history.recent')}</div>}
           {unpinned.map((entry) => (
             <ClipboardItem
               key={entry.id}

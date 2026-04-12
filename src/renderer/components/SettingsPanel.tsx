@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { Settings } from '../../shared/types';
 import { DEFAULT_SETTINGS } from '../../shared/types';
+import { useLocalization } from '../../i18n/useLocalization';
+import { changeLanguage } from '../../i18n';
 
 interface Props {
   onClose: () => void;
@@ -36,13 +38,13 @@ function captureHotkey(e: KeyboardEvent): string | null {
 }
 
 export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
+  const { translate } = useLocalization();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
   const [importExportMsg, setImportExportMsg] = useState<string | null>(null);
 
-  // Skip autosave on the initial API load — only save user-initiated changes.
   const skipNextSave = useRef(true);
 
   useEffect(() => {
@@ -52,7 +54,6 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     });
   }, []);
 
-  // Apply theme immediately when it changes
   useEffect(() => {
     if (loading) return;
     const root = document.documentElement;
@@ -63,7 +64,11 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     }
   }, [settings.theme, loading]);
 
-  // Autosave with 600ms debounce
+  useEffect(() => {
+    if (loading) return;
+    changeLanguage(settings.language);
+  }, [settings.language, loading]);
+
   useEffect(() => {
     if (loading) return;
     if (skipNextSave.current) {
@@ -78,7 +83,6 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     return () => clearTimeout(timer);
   }, [settings, loading]);
 
-  // Hotkey recorder — capture phase so Escape is handled before App's hide handler
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!recording) return;
@@ -105,7 +109,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
   const handleExport = async () => {
     const result = await window.clipstack.exportSettings();
     if (result.success) {
-      setImportExportMsg('Exported!');
+      setImportExportMsg(translate('settings.exported'));
       setTimeout(() => setImportExportMsg(null), 2000);
     }
   };
@@ -114,7 +118,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
     const imported = await window.clipstack.importSettings();
     if (!imported) return;
     setSettings({ ...DEFAULT_SETTINGS, ...imported });
-    setImportExportMsg('Imported!');
+    setImportExportMsg(translate('settings.imported'));
     setTimeout(() => setImportExportMsg(null), 2000);
   };
 
@@ -123,9 +127,9 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
   return (
     <div className="settings-panel">
       <div className="settings-section">
-        <div className="settings-section-label">General</div>
+        <div className="settings-section-label">{translate('settings.sections.general')}</div>
         <div className="settings-row">
-          <span className="settings-row-label">Theme</span>
+          <span className="settings-row-label">{translate('settings.theme.label')}</span>
           <div className="segmented">
             {(['light', 'dark', 'system'] as const).map((opt) => (
               <button
@@ -133,13 +137,26 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                 className={`segmented-btn ${settings.theme === opt ? 'active' : ''}`}
                 onClick={() => setSettings((s) => ({ ...s, theme: opt }))}
               >
-                {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                {translate(`settings.theme.${opt}`)}
               </button>
             ))}
           </div>
         </div>
         <div className="settings-row">
-          <span className="settings-row-label">Popup size</span>
+          <span className="settings-row-label">{translate('settings.language.label')}</span>
+          <select
+            className="settings-select"
+            value={settings.language}
+            onChange={(e) =>
+              setSettings((s) => ({ ...s, language: e.target.value as 'en' | 'fr' }))
+            }
+          >
+            <option value="en">{translate('settings.language.en')}</option>
+            <option value="fr">{translate('settings.language.fr')}</option>
+          </select>
+        </div>
+        <div className="settings-row">
+          <span className="settings-row-label">{translate('settings.popupSize.label')}</span>
           <div className="segmented">
             {(['compact', 'normal', 'large'] as const).map((opt) => (
               <button
@@ -147,13 +164,13 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                 className={`segmented-btn ${settings.popupSize === opt ? 'active' : ''}`}
                 onClick={() => setSettings((s) => ({ ...s, popupSize: opt }))}
               >
-                {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                {translate(`settings.popupSize.${opt}`)}
               </button>
             ))}
           </div>
         </div>
         <div className="settings-row">
-          <span className="settings-row-label">Launch at login</span>
+          <span className="settings-row-label">{translate('settings.launchAtLogin')}</span>
           <button
             className={`toggle ${settings.launchAtLogin ? 'on' : ''}`}
             onClick={() => setSettings((s) => ({ ...s, launchAtLogin: !s.launchAtLogin }))}
@@ -164,7 +181,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
           </button>
         </div>
         <div className="settings-row">
-          <span className="settings-row-label">Show popup at</span>
+          <span className="settings-row-label">{translate('settings.popupPosition.label')}</span>
           <div className="segmented">
             {(['tray', 'mouse'] as const).map((opt) => (
               <button
@@ -172,13 +189,13 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                 className={`segmented-btn ${settings.popupPosition === opt ? 'active' : ''}`}
                 onClick={() => setSettings((s) => ({ ...s, popupPosition: opt }))}
               >
-                {opt === 'tray' ? 'Tray icon' : 'Mouse cursor'}
+                {opt === 'tray' ? translate('settings.popupPosition.tray') : translate('settings.popupPosition.mouse')}
               </button>
             ))}
           </div>
         </div>
         <div className="settings-row">
-          <span className="settings-row-label">Dismiss on click away</span>
+          <span className="settings-row-label">{translate('settings.dismissOnBlur.label')}</span>
           <div className="segmented">
             {([true, false] as const).map((val) => (
               <button
@@ -186,7 +203,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                 className={`segmented-btn ${settings.dismissOnBlur === val ? 'active' : ''}`}
                 onClick={() => setSettings((s) => ({ ...s, dismissOnBlur: val }))}
               >
-                {val ? 'Auto' : 'Manual'}
+                {val ? translate('settings.dismissOnBlur.auto') : translate('settings.dismissOnBlur.manual')}
               </button>
             ))}
           </div>
@@ -194,23 +211,23 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-label">Hotkey</div>
+        <div className="settings-section-label">{translate('settings.sections.hotkey')}</div>
         <div className="settings-row">
-          <span className="settings-row-label">Global shortcut</span>
+          <span className="settings-row-label">{translate('settings.globalShortcut')}</span>
           <button
             className={`hotkey-recorder ${recording ? 'recording' : ''}`}
             onClick={() => setRecording(true)}
             onBlur={() => setRecording(false)}
           >
-            {recording ? 'Press keys…' : formatHotkey(settings.hotkey)}
+            {recording ? translate('settings.pressKeys') : formatHotkey(settings.hotkey)}
           </button>
         </div>
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-label">History</div>
+        <div className="settings-section-label">{translate('settings.sections.history')}</div>
         <div className="settings-row">
-          <span className="settings-row-label">Max items</span>
+          <span className="settings-row-label">{translate('settings.maxItems')}</span>
           <input
             className="settings-number"
             type="number"
@@ -224,7 +241,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
           />
         </div>
         <div className="settings-row">
-          <span className="settings-row-label">Poll interval</span>
+          <span className="settings-row-label">{translate('settings.pollInterval.label')}</span>
           <select
             className="settings-select"
             value={settings.pollIntervalMs}
@@ -232,16 +249,16 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
               setSettings((s) => ({ ...s, pollIntervalMs: Number(e.target.value) }))
             }
           >
-            <option value={250}>Fast (250ms)</option>
-            <option value={500}>Normal (500ms)</option>
-            <option value={1000}>Slow (1s)</option>
+            <option value={250}>{translate('settings.pollInterval.fast')}</option>
+            <option value={500}>{translate('settings.pollInterval.normal')}</option>
+            <option value={1000}>{translate('settings.pollInterval.slow')}</option>
           </select>
         </div>
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-label">Privacy</div>
-        <div className="settings-row-label" style={{ padding: '0 0 6px' }}>Ignore apps</div>
+        <div className="settings-section-label">{translate('settings.sections.privacy')}</div>
+        <div className="settings-row-label" style={{ padding: '0 0 6px' }}>{translate('settings.ignoreApps')}</div>
         {settings.ignoredApps.map((app, i) => (
           <div key={i} className="ignored-app-row">
             <span className="ignored-app-name">{app}</span>
@@ -260,22 +277,22 @@ export const SettingsPanel: React.FC<Props> = ({ onClose }) => {
                 setSettings((s) => ({ ...s, ignoredApps: [...s.ignoredApps, name] }));
               }
             }}
-          >+ Add app from Applications…</button>
+          >{translate('settings.addApp')}</button>
         </div>
       </div>
 
       <div className="settings-section">
-        <div className="settings-section-label">Backup</div>
+        <div className="settings-section-label">{translate('settings.sections.backup')}</div>
         <div className="settings-import-export">
-          <button className="settings-io-btn" onClick={handleImport}>Import</button>
-          <button className="settings-io-btn" onClick={handleExport}>Export</button>
+          <button className="settings-io-btn" onClick={handleImport}>{translate('settings.import')}</button>
+          <button className="settings-io-btn" onClick={handleExport}>{translate('settings.export')}</button>
         </div>
         {importExportMsg && <p className="settings-io-msg">{importExportMsg}</p>}
       </div>
 
       <div className="settings-footer">
-        <span className={`settings-autosave-status ${saved ? 'visible' : ''}`}>✓ Saved</span>
-        <button className="settings-cancel-btn" onClick={onClose}>Done</button>
+        <span className={`settings-autosave-status ${saved ? 'visible' : ''}`}>{translate('settings.saved')}</span>
+        <button className="settings-cancel-btn" onClick={onClose}>{translate('settings.done')}</button>
       </div>
     </div>
   );

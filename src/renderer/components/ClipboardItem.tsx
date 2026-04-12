@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import type { ClipboardEntry } from '../../shared/types';
+import { useLocalization } from '../../i18n/useLocalization';
 
 interface ClipboardItemProps {
   entry: ClipboardEntry;
@@ -9,15 +10,6 @@ interface ClipboardItemProps {
   onAddToGroup: (entry: ClipboardEntry) => void;
 }
 
-function formatTimeAgo(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
-}
-
 export const ClipboardItem: React.FC<ClipboardItemProps> = ({
   entry,
   onPaste,
@@ -25,6 +17,15 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
   onPin,
   onAddToGroup,
 }) => {
+  const { translate } = useLocalization();
+
+  function formatTimeAgo(timestamp: number): string {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return translate('history.justNow');
+    if (seconds < 3600) return translate('history.minutesAgo', { count: Math.floor(seconds / 60) });
+    if (seconds < 86400) return translate('history.hoursAgo', { count: Math.floor(seconds / 3600) });
+    return translate('history.daysAgo', { count: Math.floor(seconds / 86400) });
+  }
   const [hovered, setHovered] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -63,7 +64,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
           <button
             className="action-btn"
             onClick={() => onAddToGroup(entry)}
-            title="Add to group"
+            title={translate('actions.addToGroup')}
           >
             <svg viewBox="0 0 20 20" fill="none">
               <path d="M3 7a1 1 0 011-1h4l2 2h6a1 1 0 011 1v7a1 1 0 01-1 1H4a1 1 0 01-1-1V7z" stroke="currentColor" strokeWidth="1.3" />
@@ -74,7 +75,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
           <button
             className={`action-btn pin-btn ${isPinned ? 'active' : ''}`}
             onClick={() => onPin(entry.id)}
-            title={isPinned ? 'Unpin' : 'Pin'}
+            title={isPinned ? translate('actions.unpin') : translate('actions.pin')}
           >
             <svg viewBox="0 0 20 20" fill="none">
               <path
@@ -90,7 +91,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
           <button
             className="action-btn delete-btn"
             onClick={() => onDelete(entry.id)}
-            title="Delete"
+            title={translate('actions.delete')}
           >
             <svg viewBox="0 0 20 20" fill="none">
               <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />

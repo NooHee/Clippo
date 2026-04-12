@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+import { useLocalization } from '../../i18n/useLocalization';
 
 interface SearchBarProps {
   value: string;
@@ -7,6 +8,7 @@ interface SearchBarProps {
 }
 
 export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange, onClear }) => {
+  const { translate } = useLocalization();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -23,7 +25,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange, onClear }
       <input
         ref={inputRef}
         type="text"
-        placeholder="Search clipboard..."
+        placeholder={translate('search.placeholder')}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
@@ -38,7 +40,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange, onClear }
       />
 
       {value && (
-        <button className="clear-btn" onClick={onClear} aria-label="Clear search">
+        <button className="clear-btn" onClick={onClear} aria-label={translate('app.clear')}>
           <svg viewBox="0 0 20 20" fill="none">
             <path d="M6 6l8 8M14 6l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
