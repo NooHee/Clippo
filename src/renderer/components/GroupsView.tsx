@@ -147,7 +147,12 @@ export const GroupsView: React.FC = () => {
               <svg className="group-row-icon" viewBox="0 0 16 16" fill="none">
                 <path d="M2 5a1 1 0 011-1h4l2 2h5a1 1 0 011 1v6a1 1 0 01-1 1H3a1 1 0 01-1-1V5z" stroke="currentColor" strokeWidth="1.2" fill="none" />
               </svg>
-              <span className="group-row-name">{g.name}</span>
+              <div className="group-row-content">
+                <span className="group-row-name">{g.name}</span>
+                {g.entries.length > 0 && (
+                  <span className="group-row-preview">{g.entries[g.entries.length - 1].preview}</span>
+                )}
+              </div>
               <span className="group-row-count">{g.entries.length}</span>
               <svg className="group-row-chevron" viewBox="0 0 16 16" fill="none">
                 <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
@@ -193,16 +198,38 @@ const GroupEntryItem: React.FC<{
 }> = ({ entry, onPaste, onRemove }) => {
   const { translate } = useLocalization();
   const [hovered, setHovered] = useState(false);
+  const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewRef = useRef<HTMLParagraphElement>(null);
+
+  const isTruncated = () => {
+    const el = previewRef.current;
+    return el ? el.scrollWidth > el.clientWidth : false;
+  };
+
+  const handleMouseEnter = () => setHovered(true);
+  const handleMouseLeave = () => {
+    setHovered(false);
+    if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+    window.clipstack.hideTooltip();
+  };
+  const handleMouseMove = () => {
+    if (!isTruncated()) return;
+    if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
+    tooltipTimer.current = setTimeout(() => {
+      window.clipstack.showTooltip(entry.content);
+    }, 500);
+  };
 
   return (
     <div
       className="clipboard-item"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onMouseMove={handleMouseMove}
       onClick={onPaste}
     >
       <div className="item-content">
-        <p className="item-preview">{entry.preview}</p>
+        <p ref={previewRef} className="item-preview">{entry.preview}</p>
         <span className="item-time">
           {new Date(entry.addedAt).toLocaleDateString()}
         </span>
