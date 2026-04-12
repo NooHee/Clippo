@@ -52,6 +52,7 @@ const fr = {
       history: 'Historique',
       privacy: 'Confidentialité',
       backup: 'Sauvegarde',
+      danger: 'Zone dangereuse',
     },
     theme: {
       label: 'Thème',
@@ -92,6 +93,9 @@ const fr = {
     exported: 'Exporté !',
     saved: '✓ Sauvegardé',
     done: 'Terminé',
+    clearHistoryLabel: 'Effacer l\'historique',
+    clearHistory: 'Supprimer tous les éléments non épinglés',
+    clearHistoryConfirm: 'Cela supprimera tout l\'historique du presse-papiers non épinglé. Cette action ne peut pas être annulée.',
   },
 };
 

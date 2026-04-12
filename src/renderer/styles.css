@@ -951,6 +951,23 @@ body {
   padding: 0 2px;
 }
 
+.settings-danger-btn {
+  background: rgba(255, 107, 107, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  color: var(--danger);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.settings-danger-btn:hover {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: var(--danger);
+}
+
 /* Settings footer */
 .settings-footer {
   margin-top: auto;
