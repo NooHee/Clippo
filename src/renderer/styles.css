@@ -425,6 +425,14 @@ body {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.groups-view > .clipboard-list {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  margin-bottom: 0;
 }
 
 .groups-footer {
@@ -481,10 +489,26 @@ body {
   flex-shrink: 0;
 }
 
-.group-row-name {
+.group-row-content {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.group-row-name {
   font-size: 13px;
   color: var(--text-primary);
+}
+
+.group-row-preview {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: 'DM Mono', monospace;
 }
 
 .group-row-count {
@@ -494,6 +518,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1px 7px;
+  flex-shrink: 0;
 }
 
 .group-row-chevron {

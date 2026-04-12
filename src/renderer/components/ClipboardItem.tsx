@@ -28,9 +28,14 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
   }
   const [hovered, setHovered] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewRef = useRef<HTMLParagraphElement>(null);
 
   const isPinned = entry.pinnedAt !== null;
-  const isLong = entry.content.length > 80;
+
+  const isTruncated = () => {
+    const el = previewRef.current;
+    return el ? el.scrollWidth > el.clientWidth : false;
+  };
 
   const handleMouseEnter = () => setHovered(true);
   const handleMouseLeave = () => {
@@ -39,7 +44,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
     window.clipstack.hideTooltip();
   };
   const handleMouseMove = () => {
-    if (!isLong) return;
+    if (!isTruncated()) return;
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
     tooltipTimer.current = setTimeout(() => {
       window.clipstack.showTooltip(entry.content);
@@ -55,7 +60,7 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
       onClick={() => onPaste(entry)}
     >
       <div className="item-content">
-        <p className="item-preview">{entry.preview}</p>
+        <p ref={previewRef} className="item-preview">{entry.preview}</p>
         <span className="item-time">{formatTimeAgo(entry.createdAt)}</span>
       </div>
 
