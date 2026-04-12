@@ -13,6 +13,8 @@ const IPC = {
   SAVE_SETTINGS: 'save-settings',
   EXPORT_SETTINGS: 'export-settings',
   IMPORT_SETTINGS: 'import-settings',
+  EXPORT_HISTORY: 'export-history',
+  IMPORT_HISTORY: 'import-history',
   GET_GROUPS: 'get-groups',
   CREATE_GROUP: 'create-group',
   DELETE_GROUP: 'delete-group',
@@ -59,6 +61,12 @@ contextBridge.exposeInMainWorld('clipstack', {
 
   importSettings: () =>
     ipcRenderer.invoke(IPC.IMPORT_SETTINGS),
+
+  exportHistory: () =>
+    ipcRenderer.invoke(IPC.EXPORT_HISTORY),
+
+  importHistory: () =>
+    ipcRenderer.invoke(IPC.IMPORT_HISTORY),
 
   getGroups: () =>
     ipcRenderer.invoke(IPC.GET_GROUPS),
