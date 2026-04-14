@@ -80,7 +80,8 @@ export function addEntryToGroup(
   groupId: number,
   content: string,
   type: ClipboardEntryType,
-  preview: string
+  preview: string,
+  imageName?: string
 ): GroupEntry | null {
   const store = load();
   const group = store.groups.find((g) => g.id === groupId);
@@ -95,6 +96,7 @@ export function addEntryToGroup(
     type,
     preview,
     addedAt: Date.now(),
+    ...(imageName && { imageName }),
   };
   group.entries.unshift(entry);
   save();

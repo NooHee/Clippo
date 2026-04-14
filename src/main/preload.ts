@@ -15,6 +15,8 @@ const IPC = {
   IMPORT_SETTINGS: 'import-settings',
   EXPORT_HISTORY: 'export-history',
   IMPORT_HISTORY: 'import-history',
+  GET_IMAGE_PATH: 'get-image-path',
+  PASTE_IMAGE: 'paste-image',
   GET_GROUPS: 'get-groups',
   CREATE_GROUP: 'create-group',
   DELETE_GROUP: 'delete-group',
@@ -80,8 +82,8 @@ contextBridge.exposeInMainWorld('clipstack', {
   renameGroup: (id: number, name: string) =>
     ipcRenderer.invoke(IPC.RENAME_GROUP, id, name),
 
-  addToGroup: (groupId: number, content: string, type: string, preview: string) =>
-    ipcRenderer.invoke(IPC.ADD_TO_GROUP, groupId, content, type, preview),
+  addToGroup: (groupId: number, content: string, type: string, preview: string, imageName?: string) =>
+    ipcRenderer.invoke(IPC.ADD_TO_GROUP, groupId, content, type, preview, imageName),
 
   removeFromGroup: (groupId: number, entryId: number) =>
     ipcRenderer.invoke(IPC.REMOVE_FROM_GROUP, groupId, entryId),
@@ -91,6 +93,12 @@ contextBridge.exposeInMainWorld('clipstack', {
 
   browseForApp: () =>
     ipcRenderer.invoke(IPC.BROWSE_FOR_APP),
+
+  getImagePath: (imageName: string) =>
+    ipcRenderer.invoke(IPC.GET_IMAGE_PATH, imageName),
+
+  pasteImage: (imageName: string) =>
+    ipcRenderer.invoke(IPC.PASTE_IMAGE, imageName),
 
   showTooltip: (text: string) =>
     ipcRenderer.invoke(IPC.SHOW_TOOLTIP, text),

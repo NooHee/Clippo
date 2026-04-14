@@ -18,10 +18,12 @@ interface ClipStackBridge {
   createGroup: (name: string) => Promise<ClipboardGroup>;
   deleteGroup: (id: number) => Promise<void>;
   renameGroup: (id: number, name: string) => Promise<void>;
-  addToGroup: (groupId: number, content: string, type: ClipboardEntryType, preview: string) => Promise<GroupEntry | null>;
+  addToGroup: (groupId: number, content: string, type: ClipboardEntryType, preview: string, imageName?: string) => Promise<GroupEntry | null>;
   removeFromGroup: (groupId: number, entryId: number) => Promise<void>;
   pasteGroupEntry: (content: string) => Promise<void>;
   browseForApp: () => Promise<string | null>;
+  getImagePath: (imageName: string) => Promise<string>;
+  pasteImage: (imageName: string) => Promise<{ success: boolean }>;
   showTooltip: (text: string) => Promise<void>;
   hideTooltip: () => Promise<void>;
   onWindowHidden: (callback: () => void) => () => void;

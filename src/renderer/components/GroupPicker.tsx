@@ -24,7 +24,7 @@ export const GroupPicker: React.FC<Props> = ({ entry, onClose }) => {
   }, [creating]);
 
   const addTo = async (groupId: number) => {
-    await window.clipstack.addToGroup(groupId, entry.content, entry.type, entry.preview);
+    await window.clipstack.addToGroup(groupId, entry.content, entry.type, entry.preview, entry.imageName);
     setAdded(groupId);
     setTimeout(onClose, 600);
   };

@@ -4,6 +4,7 @@ import { app } from 'electron';
 import type { ClipboardEntry } from '../shared/types';
 import { loadSettings } from './settings';
 import { encrypt, decrypt, isAvailable } from './encrypting';
+import { deleteImage } from './imageHandler';
 
 // Pure JSON persistence — no native modules, works with any Node version.
 
@@ -50,7 +51,7 @@ function saveStore(): void {
   fs.writeFileSync(getStorePath(), data, 'utf-8');
 }
 
-export function insertEntry(content: string, type: ClipboardEntry['type']): ClipboardEntry | null {
+export function insertEntry(content: string, type: ClipboardEntry['type'], imageName?: string): ClipboardEntry | null {
   const store = loadStore();
   const now = Date.now();
 
@@ -73,6 +74,7 @@ export function insertEntry(content: string, type: ClipboardEntry['type']): Clip
     createdAt: now,
     pinnedAt: null,
     usageCount: 0,
+    ...(imageName && { imageName }),
   };
 
   store.entries.unshift(entry);
@@ -97,6 +99,13 @@ export function getHistory(query = ''): ClipboardEntry[] {
 
 export function deleteEntry(id: number): void {
   const store = loadStore();
+  const entry = store.entries.find((e) => e.id === id);
+
+  // Delete associated image file if it exists
+  if (entry && entry.type === 'image' && entry.imageName) {
+    deleteImage(entry.imageName);
+  }
+
   store.entries = store.entries.filter((e) => e.id !== id);
   saveStore();
 }
@@ -112,6 +121,15 @@ export function togglePin(id: number): void {
 
 export function clearHistory(): void {
   const store = loadStore();
+  const entriesToDelete = store.entries.filter((e) => e.pinnedAt === null);
+
+  // Delete associated image files
+  for (const entry of entriesToDelete) {
+    if (entry.type === 'image' && entry.imageName) {
+      deleteImage(entry.imageName);
+    }
+  }
+
   store.entries = store.entries.filter((e) => e.pinnedAt !== null);
   saveStore();
 }

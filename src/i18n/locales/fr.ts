@@ -1,6 +1,6 @@
 const fr = {
   app: {
-    'name': 'ClipStack',
+    'name': 'Clippo',
     history: 'Historique',
     groups: 'Groupes',
     clear: 'Effacer',
