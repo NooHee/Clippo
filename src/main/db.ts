@@ -13,7 +13,43 @@ interface Store {
   nextId: number;
 }
 
+// In-memory indexes for faster queries
+interface Indexes {
+  byId: Map<number, number>; // id -> index in entries array
+  contentIndex: Map<string, number[]>; // lowercase content -> entry ids
+  typeIndex: Map<string, number[]>; // type -> entry ids
+}
+
 let _store: Store | null = null;
+let _indexes: Indexes | null = null;
+
+function buildIndexes(store: Store): Indexes {
+  const indexes: Indexes = {
+    byId: new Map(),
+    contentIndex: new Map(),
+    typeIndex: new Map(),
+  };
+
+  store.entries.forEach((entry, index) => {
+    // Index by ID
+    indexes.byId.set(entry.id, index);
+
+    // Index content (lowercase for case-insensitive search)
+    const contentKey = entry.content.toLowerCase();
+    if (!indexes.contentIndex.has(contentKey)) {
+      indexes.contentIndex.set(contentKey, []);
+    }
+    indexes.contentIndex.get(contentKey)!.push(entry.id);
+
+    // Index by type
+    if (!indexes.typeIndex.has(entry.type)) {
+      indexes.typeIndex.set(entry.type, []);
+    }
+    indexes.typeIndex.get(entry.type)!.push(entry.id);
+  });
+
+  return indexes;
+}
 
 function getStorePath(): string {
   return path.join(app.getPath('userData'), 'clipstack-history.json');
@@ -41,6 +77,8 @@ function loadStore(): Store {
     _store = { entries: [], nextId: 1 };
   }
 
+  // Build indexes after loading
+  _indexes = buildIndexes(_store);
   return _store;
 }
 
@@ -49,6 +87,8 @@ function saveStore(): void {
   const json = JSON.stringify(_store);
   const data = isAvailable() ? encrypt(json) : json;
   fs.writeFileSync(getStorePath(), data, 'utf-8');
+  // Rebuild indexes after saving
+  _indexes = buildIndexes(_store);
 }
 
 export function insertEntry(content: string, type: ClipboardEntry['type'], imageName?: string): ClipboardEntry | null {
@@ -85,11 +125,34 @@ export function insertEntry(content: string, type: ClipboardEntry['type'], image
 }
 
 export function getHistory(query = ''): ClipboardEntry[] {
-  const { entries } = loadStore();
+  const store = loadStore();
+  const { entries } = store;
 
-  const filtered = query
-    ? entries.filter((e) => e.content.toLowerCase().includes(query.toLowerCase()))
-    : entries;
+  let filtered: ClipboardEntry[];
+
+  if (query) {
+    // Use content index for faster search
+    const queryLower = query.toLowerCase();
+    const matchingIds = new Set<number>();
+
+    // Search through indexed content
+    _indexes?.contentIndex.forEach((ids, content) => {
+      if (content.includes(queryLower)) {
+        ids.forEach(id => matchingIds.add(id));
+      }
+    });
+
+    // Also search through preview text as fallback
+    entries.forEach((e) => {
+      if (e.preview.toLowerCase().includes(queryLower)) {
+        matchingIds.add(e.id);
+      }
+    });
+
+    filtered = entries.filter(e => matchingIds.has(e.id));
+  } else {
+    filtered = entries;
+  }
 
   const pinned = filtered.filter((e) => e.pinnedAt !== null).sort((a, b) => b.pinnedAt! - a.pinnedAt!);
   const unpinned = filtered.filter((e) => e.pinnedAt === null);
