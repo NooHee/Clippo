@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, screen } from 'electron';
+import { execSync } from 'child_process';
 import path from 'path';
 import { ClipboardService } from './clipboard';
 import { registerIpcHandlers } from './ipc';
@@ -12,6 +13,7 @@ let tray: Tray | null = null;
 let window: BrowserWindow | null = null;
 let tooltipWindow: BrowserWindow | null = null;
 let clipboardService: ClipboardService | null = null;
+let previousAppName: string | null = null;
 
 /**
  * Gracefully hide the window:
@@ -19,15 +21,23 @@ let clipboardService: ClipboardService | null = null;
  * 2. Tell renderer to reset state (it re-renders while transparent)
  * 3. After a short delay (enough for React to commit), actually hide + restore opacity
  */
-export function hideWindowGracefully(win: BrowserWindow): void {
+
+export function hideWindowGracefully(win: BrowserWindow, onHidden?: () => void): void {
   //TODO To fix later, the problem is the view is refreshing after opening the popup and not before
   if (!win.isVisible()) return;
-  tooltipWindow?.hide();
+
+  // Hide tooltip immediately and ensure it stays hidden
+  if (tooltipWindow) {
+    tooltipWindow.hide();
+    tooltipWindow.setOpacity(0);
+  }
+
   win.setOpacity(0);
   win.webContents.send('window-will-hide');
   setTimeout(() => {
     win.hide();
     win.setOpacity(1);
+    onHidden?.();
   }, 80);
 }
 
@@ -83,7 +93,7 @@ function createWindow(): BrowserWindow {
     win.loadFile(path.join(app.getAppPath(), 'dist/renderer/index.html'));
   }
 
-  if (isDev) win.webContents.openDevTools({ mode: 'detach' });
+  //if (isDev) win.webContents.openDevTools({ mode: 'detach' });
 
   win.on('blur', () => {
     tooltipWindow?.hide();
@@ -126,6 +136,7 @@ function toggleWindow(win: BrowserWindow): void {
     hideWindowGracefully(win);
     return;
   }
+
   positionWindow(win);
   win.show();
   win.focus();
@@ -157,7 +168,35 @@ function positionWindow(win: BrowserWindow): void {
 
 function registerShortcuts(win: BrowserWindow, hotkey: string): void {
   globalShortcut.unregisterAll();
-  globalShortcut.register(hotkey, () => toggleWindow(win));
+  globalShortcut.register(hotkey, () => {
+    // Capture previous app name BEFORE toggling
+    try {
+      previousAppName = execSync(
+        `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`,
+        { timeout: 1000, encoding: 'utf-8' }
+      ).trim();
+      console.log('[ClipStack] Captured previous app:', previousAppName);
+    } catch (e) {
+      console.warn('[ClipStack] Failed to capture app, will paste without focus restoration');
+      previousAppName = null;
+    }
+    toggleWindow(win);
+  });
+}
+
+export function restoreFocusAndPaste(): void {
+  if (previousAppName && previousAppName !== 'ClipStack') {
+    try {
+      // Activate app and paste in one AppleScript command
+      const script = `
+        activate application "${previousAppName}"
+        tell application "System Events" to keystroke "v" using command down
+      `;
+      execSync(`osascript -e '${script}'`, { timeout: 500 });
+    } catch (e) {
+      console.error('[ClipStack] Failed to restore focus and paste:', e);
+    }
+  }
 }
 
 app.whenReady().then(() => {
