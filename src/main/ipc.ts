@@ -7,7 +7,7 @@ import { ClipboardService } from './clipboard';
 import { loadSettings, saveSettings } from './settings';
 import { getGroups, createGroup, deleteGroup, renameGroup, addEntryToGroup, removeEntryFromGroup } from './groups';
 import type { ClipboardEntryType } from '../shared/types';
-import { hideWindowGracefully } from './index';
+import { hideWindowGracefully, restoreFocusAndPaste } from './index';
 import { pasteImageToClipboard, getImagePath, getThumbnailPath } from './imageHandler';
 
 export function registerIpcHandlers(
@@ -27,10 +27,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.PASTE_ENTRY, (_event, id: number, content: string) => {
     incrementUsage(id);
     clipboardService.writeToClipboard(content);
-    hideWindowGracefully(window);
-
-    // Simulate Cmd+V after the window has fully hidden
-    setTimeout(() => simulatePaste(), 230);
+    hideWindowGracefully(window, () => restoreFocusAndPaste());
   });
 
   ipcMain.handle(IPC.DELETE_ENTRY, (_event, id: number) => {
@@ -264,8 +261,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.PASTE_IMAGE, (_event, imageName: string) => {
     const success = pasteImageToClipboard(imageName);
     if (success) {
-      hideWindowGracefully(window);
-      setTimeout(() => simulatePaste(), 230);
+      hideWindowGracefully(window, () => restoreFocusAndPaste());
     }
     return { success };
   });

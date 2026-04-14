@@ -1,13 +1,12 @@
 {
   "name": "clipstack",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Clipboard history manager for macOS",
   "main": "dist/main/main/index.js",
   "scripts": {
-    "bump-version": "node scripts/bump-version.js",
     "build:main": "tsc -p tsconfig.main.json",
     "build:renderer": "vite build",
-    "build": "npm run bump-version && npm run build:main && npm run build:renderer",
+    "build": "npm run build:main && npm run build:renderer",
     "dev": "concurrently -k \"vite\" \"npm run build:main && wait-on http://localhost:5173 && NODE_ENV=development electron .\"",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder --mac"

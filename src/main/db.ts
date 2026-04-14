@@ -136,10 +136,18 @@ export function clearHistory(): void {
 
 export function incrementUsage(id: number): void {
   const store = loadStore();
-  const entry = store.entries.find((e) => e.id === id);
-  if (!entry) return;
+  const entryIndex = store.entries.findIndex((e) => e.id === id);
+  if (entryIndex === -1) return;
 
+  const entry = store.entries[entryIndex];
   entry.usageCount += 1;
+
+  // Move to top (most recent) if it's not already pinned
+  if (entry.pinnedAt === null && entryIndex !== 0) {
+    store.entries.splice(entryIndex, 1);
+    store.entries.unshift(entry);
+  }
+
   saveStore();
 }
 
