@@ -72,3 +72,12 @@ src/
       ClipboardItem.tsx    # Hover actions: pin / delete
     styles.css             # Dark macOS aesthetic, backdrop blur
 ```
+
+## License
+
+This project is licensed under the **Creative Commons Attribution 4.0 (CC BY)** license.
+
+You are free to use, modify, and distribute this project for any purpose (personal or commercial)
+as long as you give credit to the original author **Noé Serwy**.
+
+See [LICENSE](LICENSE) for details.
