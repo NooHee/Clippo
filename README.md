@@ -1,4 +1,4 @@
-# ClipStack
+# Clippo
 
 A minimal clipboard history manager for macOS — inspired by Ditto.
 
