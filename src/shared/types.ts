@@ -85,6 +85,9 @@ export interface IpcChannels {
   BROWSE_FOR_APP: 'browse-for-app';
   SHOW_TOOLTIP: 'show-tooltip';
   HIDE_TOOLTIP: 'hide-tooltip';
+  CHECK_PERMISSIONS: 'check-permissions';
+  COMPLETE_ONBOARDING: 'complete-onboarding';
+  OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings';
 
   // Main → Renderer
   CLIPBOARD_UPDATED: 'clipboard-updated';
@@ -116,5 +119,8 @@ export const IPC: IpcChannels = {
   BROWSE_FOR_APP: 'browse-for-app',
   SHOW_TOOLTIP: 'show-tooltip',
   HIDE_TOOLTIP: 'hide-tooltip',
+  CHECK_PERMISSIONS: 'check-permissions',
+  COMPLETE_ONBOARDING: 'complete-onboarding',
+  OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings',
   CLIPBOARD_UPDATED: 'clipboard-updated',
 };

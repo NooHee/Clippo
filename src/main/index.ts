@@ -89,11 +89,10 @@ function createWindow(): BrowserWindow {
 
   if (isDev) {
     win.loadURL('http://localhost:5173');
+    win.webContents.openDevTools({ mode: 'detach' });
   } else {
     win.loadFile(path.join(app.getAppPath(), 'dist/renderer/index.html'));
   }
-
-  //if (isDev) win.webContents.openDevTools({ mode: 'detach' });
 
   win.on('blur', () => {
     tooltipWindow?.hide();

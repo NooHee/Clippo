@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { PermissionStatus } from '../window';
+import type { PermissionStatus } from '../../shared/types';
 
 interface OnboardingModalProps {
   onComplete: () => void;
