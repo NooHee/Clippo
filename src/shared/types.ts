@@ -21,6 +21,13 @@ export interface Settings {
   theme: 'light' | 'dark' | 'system';
   ignoredApps: string[];
   language: 'en' | 'fr';
+  onboardingCompleted?: boolean;
+}
+
+export interface PermissionStatus {
+  keychain: boolean;
+  systemEvents: boolean;
+  accessibility: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
