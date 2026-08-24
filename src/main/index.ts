@@ -193,7 +193,7 @@ export function restoreFocusAndPaste(): void {
       `;
       execSync(`osascript -e '${script}'`, { timeout: 500 });
     } catch (e) {
-      console.error('[ClipStack] Failed to restore focus and paste:', e);
+      console.error('[Clippo] Failed to restore focus and paste:', e);
     }
   }
 }

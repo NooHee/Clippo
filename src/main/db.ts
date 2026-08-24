@@ -52,7 +52,7 @@ function buildIndexes(store: Store): Indexes {
 }
 
 function getStorePath(): string {
-  return path.join(app.getPath('userData'), 'clipstack-history.json');
+  return path.join(app.getPath('userData'), 'clippo-history.json');
 }
 
 function loadStore(): Store {

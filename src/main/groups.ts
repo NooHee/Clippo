@@ -13,7 +13,7 @@ interface GroupStore {
 let _store: GroupStore | null = null;
 
 function getPath(): string {
-  return path.join(app.getPath('userData'), 'clipstack-groups.json');
+  return path.join(app.getPath('userData'), 'clippo-groups.json');
 }
 
 function load(): GroupStore {

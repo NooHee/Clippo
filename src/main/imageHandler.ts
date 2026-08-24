@@ -72,12 +72,12 @@ export function saveClipboardImage(): { imagePath: string; imageName: string; mi
     try {
       generateThumbnail(imageName, image);
     } catch (e) {
-      console.warn('[ClipStack] Failed to generate thumbnail:', e);
+      console.warn('[Clippo] Failed to generate thumbnail:', e);
     }
 
     return { imagePath, imageName, mimeType: 'image/png' };
   } catch (e) {
-    console.error('[ClipStack] Failed to save clipboard image:', e);
+    console.error('[Clippo] Failed to save clipboard image:', e);
     return null;
   }
 }
@@ -111,7 +111,7 @@ export function deleteImage(imageName: string): void {
       fs.unlinkSync(thumbPath);
     }
   } catch (e) {
-    console.warn('[ClipStack] Failed to delete image:', e);
+    console.warn('[Clippo] Failed to delete image:', e);
   }
 }
 
@@ -146,7 +146,7 @@ export function pasteImageToClipboard(imageName: string): boolean {
     clipboard.writeImage(nativeImage);
     return true;
   } catch (e) {
-    console.error('[ClipStack] Failed to paste image to clipboard:', e);
+    console.error('[Clippo] Failed to paste image to clipboard:', e);
     return false;
   }
 }
