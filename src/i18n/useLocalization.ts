@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
  *
  * Usage:
  *   const { translate } = useLocalization();
- *   translate('app.name') // → 'ClipStack'
+ *   translate('app.name') // → 'Clippo'
  */
 export function useLocalization() {
   const { t: translate } = useTranslation();

@@ -35,13 +35,13 @@ NODE_ENV=development npm run dev:main
 
 For auto-paste to work (simulating `Cmd+V` after selecting an item), grant Accessibility access:
 
-**System Settings → Privacy & Security → Accessibility → add your terminal / ClipStack**
+**System Settings → Privacy & Security → Accessibility → add your terminal / Clippo**
 
 Without this, clipboard is still written — you just paste manually with `Cmd+V`.
 
 ## Shortcut
 
-`Cmd+Shift+V` — toggle the ClipStack window from anywhere.
+`Cmd+Shift+V` — toggle the Clippo window from anywhere.
 
 ## Build (distributable .dmg)
 

@@ -60,7 +60,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC.EXPORT_SETTINGS, async () => {
     const { filePath, canceled } = await dialog.showSaveDialog(window, {
-      defaultPath: 'clipstack-settings.json',
+      defaultPath: 'clippo-settings.json',
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
     if (canceled || !filePath) return { success: false };
@@ -163,7 +163,7 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IPC.EXPORT_HISTORY, async () => {
     const { filePath, canceled } = await dialog.showSaveDialog(window, {
-      defaultPath: 'clipstack-history.json',
+      defaultPath: 'clippo-history.json',
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
     if (canceled || !filePath) return { success: false };
@@ -254,7 +254,7 @@ export function registerIpcHandlers(
       const base64 = imageData.toString('base64');
       return `data:image/png;base64,${base64}`;
     } catch (e) {
-      console.error('[ClipStack] Failed to load image:', e);
+      console.error('[Clippo] Failed to load image:', e);
       return null;
     }
   });
@@ -283,7 +283,7 @@ export function registerIpcHandlers(
     try {
       execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
     } catch (e) {
-      console.error('[ClipStack] Failed to open accessibility settings:', e);
+      console.error('[Clippo] Failed to open accessibility settings:', e);
     }
   });
 }
@@ -295,6 +295,6 @@ function simulatePaste(): void {
     execSync(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`);
   } catch {
     // Accessibility permissions not granted — clipboard is still written, user pastes manually
-    console.warn('[ClipStack] Could not simulate paste. Grant Accessibility permissions in System Settings.');
+    console.warn('[Clippo] Could not simulate paste. Grant Accessibility permissions in System Settings.');
   }
 }

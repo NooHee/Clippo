@@ -8,7 +8,7 @@ import { encrypt, decrypt, isAvailable } from './encrypting';
 let _settings: Settings | null = null;
 
 function getSettingsPath(): string {
-  return path.join(app.getPath('userData'), 'clipstack-settings.json');
+  return path.join(app.getPath('userData'), 'clippo-settings.json');
 }
 
 export function loadSettings(): Settings {

@@ -19,7 +19,7 @@ function safeCheck(check: () => boolean): boolean {
   try {
     return check();
   } catch (e) {
-    console.error('[ClipStack] Permission check failed:', e);
+    console.error('[Clippo] Permission check failed:', e);
     return false;
   }
 }

@@ -70,13 +70,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.pkg.outputs.version }}
-          name: ClipStack v${{ steps.pkg.outputs.version }}
+          name: Clippo v${{ steps.pkg.outputs.version }}
           body: |
             Automated build from commit ${{ github.sha }}
 
             **Download the right file for your Mac:**
-            - `ClipStack-*-arm64-mac.zip` → Apple Silicon (M1/M2/M3/M4) — unzip and drag to Applications
-            - `ClipStack-*.dmg` → Intel Mac
+            - `Clippo-*-arm64-mac.zip` → Apple Silicon (M1/M2/M3/M4) — unzip and drag to Applications
+            - `Clippo-*.dmg` → Intel Mac
 
             > First launch: right-click the app → Open to bypass Gatekeeper.
           files: |
