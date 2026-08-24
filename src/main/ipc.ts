@@ -28,7 +28,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.PASTE_ENTRY, (_event, id: number, content: string) => {
     incrementUsage(id);
     clipboardService.writeToClipboard(content);
-    hideWindowGracefully(window, () => restoreFocusAndPaste());
+    hideWindowGracefully(window, () => simulatePaste());
   });
 
   ipcMain.handle(IPC.DELETE_ENTRY, (_event, id: number) => {
@@ -262,7 +262,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.PASTE_IMAGE, (_event, imageName: string) => {
     const success = pasteImageToClipboard(imageName);
     if (success) {
-      hideWindowGracefully(window, () => restoreFocusAndPaste());
+      hideWindowGracefully(window, () => simulatePaste());
     }
     return { success };
   });
