@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, memo } from 'react';
 import { FolderPlus, Pin, Trash2 } from 'lucide-react';
 import type { ClipboardEntry } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
@@ -12,7 +12,7 @@ interface ClipboardItemProps {
   onAddToGroup: (entry: ClipboardEntry) => void;
 }
 
-export const ClipboardItem: React.FC<ClipboardItemProps> = ({
+const ClipboardItemComponent: React.FC<ClipboardItemProps> = ({
   entry,
   onPaste,
   onDelete,
@@ -115,3 +115,5 @@ export const ClipboardItem: React.FC<ClipboardItemProps> = ({
     </div>
   );
 };
+
+export const ClipboardItem = memo(ClipboardItemComponent);

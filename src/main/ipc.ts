@@ -9,6 +9,7 @@ import { getGroups, createGroup, deleteGroup, renameGroup, addEntryToGroup, remo
 import type { ClipboardEntryType } from '../shared/types';
 import { hideWindowGracefully, restoreFocusAndPaste } from './index';
 import { pasteImageToClipboard, getImagePath, getThumbnailPath } from './imageHandler';
+import { checkPermissions } from './permissionChecker';
 
 export function registerIpcHandlers(
   window: BrowserWindow,
@@ -27,7 +28,7 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.PASTE_ENTRY, (_event, id: number, content: string) => {
     incrementUsage(id);
     clipboardService.writeToClipboard(content);
-    hideWindowGracefully(window, () => restoreFocusAndPaste());
+    hideWindowGracefully(window, () => simulatePaste());
   });
 
   ipcMain.handle(IPC.DELETE_ENTRY, (_event, id: number) => {
@@ -261,9 +262,29 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC.PASTE_IMAGE, (_event, imageName: string) => {
     const success = pasteImageToClipboard(imageName);
     if (success) {
-      hideWindowGracefully(window, () => restoreFocusAndPaste());
+      hideWindowGracefully(window, () => simulatePaste());
     }
     return { success };
+  });
+
+  ipcMain.handle(IPC.CHECK_PERMISSIONS, () => {
+    return checkPermissions();
+  });
+
+  ipcMain.handle(IPC.COMPLETE_ONBOARDING, () => {
+    const settings = loadSettings();
+    settings.onboardingCompleted = true;
+    saveSettings(settings);
+  });
+
+  ipcMain.handle(IPC.OPEN_ACCESSIBILITY_SETTINGS, () => {
+    // Open macOS System Preferences → Security & Privacy → Accessibility
+    const { execSync } = require('child_process') as typeof import('child_process');
+    try {
+      execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
+    } catch (e) {
+      console.error('[ClipStack] Failed to open accessibility settings:', e);
+    }
   });
 }
 

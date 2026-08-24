@@ -1,4 +1,4 @@
-import type { ClipboardEntry, ClipboardEntryType, ClipboardGroup, GroupEntry, Settings } from '../shared/types';
+import type { ClipboardEntry, ClipboardEntryType, ClipboardGroup, GroupEntry, Settings, PermissionStatus } from '../shared/types';
 
 interface ClipStackBridge {
   getHistory: (query?: string) => Promise<ClipboardEntry[]>;
@@ -26,6 +26,9 @@ interface ClipStackBridge {
   pasteImage: (imageName: string) => Promise<{ success: boolean }>;
   showTooltip: (text: string) => Promise<void>;
   hideTooltip: () => Promise<void>;
+  checkPermissions: () => Promise<PermissionStatus>;
+  completeOnboarding: () => Promise<void>;
+  openAccessibilitySettings: () => Promise<void>;
   onWindowHidden: (callback: () => void) => () => void;
   onWindowWillHide: (callback: () => void) => () => void;
   onClipboardUpdated: (callback: (entry: ClipboardEntry) => void) => () => void;

@@ -89,11 +89,10 @@ function createWindow(): BrowserWindow {
 
   if (isDev) {
     win.loadURL('http://localhost:5173');
+    win.webContents.openDevTools({ mode: 'detach' });
   } else {
     win.loadFile(path.join(app.getAppPath(), 'dist/renderer/index.html'));
   }
-
-  //if (isDev) win.webContents.openDevTools({ mode: 'detach' });
 
   win.on('blur', () => {
     tooltipWindow?.hide();
@@ -119,12 +118,12 @@ function createTray(win: BrowserWindow): Tray {
   const t = new Tray(icon);
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Open ClipStack', click: () => toggleWindow(win) },
+    { label: 'Open Clippo', click: () => toggleWindow(win) },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
   ]);
 
-  t.setToolTip('ClipStack');
+  t.setToolTip('Clippo');
   t.setContextMenu(contextMenu);
   t.on('click', () => toggleWindow(win));
 
@@ -175,9 +174,9 @@ function registerShortcuts(win: BrowserWindow, hotkey: string): void {
         `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`,
         { timeout: 1000, encoding: 'utf-8' }
       ).trim();
-      console.log('[ClipStack] Captured previous app:', previousAppName);
+      console.log('[Clippo] Captured previous app:', previousAppName);
     } catch (e) {
-      console.warn('[ClipStack] Failed to capture app, will paste without focus restoration');
+      console.warn('[Clippo] Failed to capture app, will paste without focus restoration');
       previousAppName = null;
     }
     toggleWindow(win);
@@ -185,7 +184,7 @@ function registerShortcuts(win: BrowserWindow, hotkey: string): void {
 }
 
 export function restoreFocusAndPaste(): void {
-  if (previousAppName && previousAppName !== 'ClipStack') {
+  if (previousAppName && previousAppName !== 'Clippo') {
     try {
       // Activate app and paste in one AppleScript command
       const script = `

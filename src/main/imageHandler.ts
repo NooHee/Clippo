@@ -4,26 +4,44 @@ import { app } from 'electron';
 import { clipboard } from 'electron';
 import crypto from 'crypto';
 
-const IMAGES_DIR = path.join(app.getPath('userData'), 'images');
-const THUMBNAILS_DIR = path.join(IMAGES_DIR, 'thumbnails');
 const THUMBNAIL_SIZE = 120;
+
+// Lazy-load paths to avoid calling app.getPath() before app is ready
+let IMAGES_DIR: string | null = null;
+let THUMBNAILS_DIR: string | null = null;
+
+function getImagesDirPath(): string {
+  if (!IMAGES_DIR) {
+    IMAGES_DIR = path.join(app.getPath('userData'), 'images');
+  }
+  return IMAGES_DIR;
+}
+
+function getThumbnailsDirPath(): string {
+  if (!THUMBNAILS_DIR) {
+    THUMBNAILS_DIR = path.join(getImagesDirPath(), 'thumbnails');
+  }
+  return THUMBNAILS_DIR;
+}
 
 // Ensure image directories exist
 export function ensureImageDirs(): void {
-  if (!fs.existsSync(IMAGES_DIR)) {
-    fs.mkdirSync(IMAGES_DIR, { recursive: true });
+  const imagesDir = getImagesDirPath();
+  const thumbnailsDir = getThumbnailsDirPath();
+  if (!fs.existsSync(imagesDir)) {
+    fs.mkdirSync(imagesDir, { recursive: true });
   }
-  if (!fs.existsSync(THUMBNAILS_DIR)) {
-    fs.mkdirSync(THUMBNAILS_DIR, { recursive: true });
+  if (!fs.existsSync(thumbnailsDir)) {
+    fs.mkdirSync(thumbnailsDir, { recursive: true });
   }
 }
 
 export function getImagePath(imageName: string): string {
-  return path.join(IMAGES_DIR, imageName);
+  return path.join(getImagesDirPath(), imageName);
 }
 
 export function getThumbnailPath(imageName: string): string {
-  return path.join(THUMBNAILS_DIR, `thumb_${imageName}`);
+  return path.join(getThumbnailsDirPath(), `thumb_${imageName}`);
 }
 
 /**

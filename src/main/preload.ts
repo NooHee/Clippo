@@ -28,6 +28,9 @@ const IPC = {
   SHOW_TOOLTIP: 'show-tooltip',
   HIDE_TOOLTIP: 'hide-tooltip',
   CLIPBOARD_UPDATED: 'clipboard-updated',
+  CHECK_PERMISSIONS: 'check-permissions',
+  COMPLETE_ONBOARDING: 'complete-onboarding',
+  OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings',
 } as const;
 
 contextBridge.exposeInMainWorld('clipstack', {
@@ -105,6 +108,15 @@ contextBridge.exposeInMainWorld('clipstack', {
 
   hideTooltip: () =>
     ipcRenderer.invoke(IPC.HIDE_TOOLTIP),
+
+  checkPermissions: () =>
+    ipcRenderer.invoke(IPC.CHECK_PERMISSIONS),
+
+  completeOnboarding: () =>
+    ipcRenderer.invoke(IPC.COMPLETE_ONBOARDING),
+
+  openAccessibilitySettings: () =>
+    ipcRenderer.invoke(IPC.OPEN_ACCESSIBILITY_SETTINGS),
 
   onWindowHidden: (callback: () => void) => {
     const handler = () => callback();
