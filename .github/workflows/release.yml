@@ -1,8 +1,8 @@
 name: Build & Release
 
 # One pipeline for every change:
-#   pull request  -> test, build (packaging check)
-#   push to main  -> test, build, then release-please either updates the open
+#   pull request  -> test only (Linux, under a minute)
+#   push to main  -> test, macOS build, then release-please either updates the open
 #                    release PR or, when that PR was just merged, tags the
 #                    release and the publish job attaches the macOS builds.
 on:
@@ -12,6 +12,12 @@ on:
   pull_request:
     branches:
       - main
+    # Documentation-only pull requests do not need CI. Pushes to main always run, because
+    # release-please must see every merged commit.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
 
 permissions:
   contents: read
@@ -47,8 +53,11 @@ jobs:
       - name: End-to-end smoke test
         run: xvfb-run -a npm run test:e2e
 
+  # Packaging runs on macOS, the slowest and most expensive runner, so it only runs where its
+  # output is used: on main, where release-please may publish it.
   build:
     needs: test
+    if: github.event_name == 'push'
     runs-on: macos-latest
     permissions:
       contents: read
