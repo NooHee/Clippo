@@ -38,7 +38,9 @@ class FakeActivation implements AppActivation {
   }
 }
 
-function setup(overrides: { active?: boolean; regainsFocus?: boolean; keystrokeWorks?: boolean; mac?: boolean } = {}) {
+function setup(
+  overrides: { active?: boolean; regainsFocus?: boolean; keystrokeWorks?: boolean; mac?: boolean; trusted?: boolean } = {},
+) {
   const calls: string[] = [];
   const activation = new FakeActivation(calls, overrides.active ?? true, overrides.regainsFocus ?? true);
   const deps: PasteServiceDeps = {
@@ -51,7 +53,14 @@ function setup(overrides: { active?: boolean; regainsFocus?: boolean; keystrokeW
       return overrides.keystrokeWorks ?? true;
     },
     isAutoPasteSupported: overrides.mac ?? true,
-    logger: { warn: () => undefined },
+    hasAccessibilityPermission: () => overrides.trusted ?? true,
+    onAccessibilityMissing: () => {
+      calls.push('explain-permission');
+    },
+    waitForFocusToSettle: async () => {
+      calls.push('settle');
+    },
+    logger: { warn: () => undefined, info: () => undefined },
   };
   return { calls, activation, service: new PasteService(deps) };
 }
@@ -61,7 +70,7 @@ describe('PasteService', () => {
     const { service, calls, activation } = setup();
 
     await expect(service.pasteIntoPreviousApp()).resolves.toBe('pasted');
-    expect(calls).toEqual(['hide', 'yield', 'keystroke']);
+    expect(calls).toEqual(['hide', 'yield', 'settle', 'keystroke']);
     expect(activation.waitedWith).toBe(FOCUS_HANDBACK_TIMEOUT_MS);
   });
 
@@ -69,7 +78,7 @@ describe('PasteService', () => {
     const { service, calls } = setup({ active: false });
 
     await expect(service.pasteIntoPreviousApp()).resolves.toBe('pasted');
-    expect(calls).toEqual(['hide', 'keystroke']);
+    expect(calls).toEqual(['hide', 'settle', 'keystroke']);
   });
 
   it('keeps the entry on the clipboard instead of pasting blindly if focus never came back', async () => {
@@ -77,6 +86,13 @@ describe('PasteService', () => {
 
     await expect(service.pasteIntoPreviousApp()).resolves.toBe('copied');
     expect(calls).toEqual(['hide', 'yield']);
+  });
+
+  it('does not send a keystroke macOS would drop, and explains the missing permission', async () => {
+    const { service, calls } = setup({ trusted: false });
+
+    await expect(service.pasteIntoPreviousApp()).resolves.toBe('copied');
+    expect(calls).toEqual(['hide', 'yield', 'explain-permission']);
   });
 
   it('reports "copied" when the keystroke cannot be sent (no Accessibility permission)', async () => {
@@ -96,7 +112,7 @@ describe('PasteService', () => {
     const { service, calls } = setup({ active: false });
 
     await Promise.all([service.pasteIntoPreviousApp(), service.pasteIntoPreviousApp()]);
-    expect(calls).toEqual(['hide', 'keystroke', 'hide', 'keystroke']);
+    expect(calls).toEqual(['hide', 'settle', 'keystroke', 'hide', 'settle', 'keystroke']);
   });
 
   it('dismiss hides and returns focus without pasting', async () => {
