@@ -1,8 +1,8 @@
 name: Build & Release
 
 # One pipeline for every change:
-#   pull request  -> test, build (packaging check)
-#   push to main  -> test, build, then release-please either updates the open
+#   pull request  -> test only (Linux, under a minute)
+#   push to main  -> test, macOS build, then release-please either updates the open
 #                    release PR or, when that PR was just merged, tags the
 #                    release and the publish job attaches the macOS builds.
 on:
@@ -12,6 +12,12 @@ on:
   pull_request:
     branches:
       - main
+    # Documentation-only pull requests do not need CI. Pushes to main always run, because
+    # release-please must see every merged commit.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
 
 permissions:
   contents: read
@@ -47,8 +53,11 @@ jobs:
       - name: End-to-end smoke test
         run: xvfb-run -a npm run test:e2e
 
+  # Packaging runs on macOS, the slowest and most expensive runner, so it only runs where its
+  # output is used: on main, where release-please may publish it.
   build:
     needs: test
+    if: github.event_name == 'push'
     runs-on: macos-latest
     permissions:
       contents: read
@@ -65,6 +74,30 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Imports the stable self-signed certificate (MAC_SIGNING_CERT_* secrets) into a
+      # throwaway keychain, so scripts/mac/sign.js signs every build with the same identity and
+      # users keep their Accessibility permission across updates. Skipped when secrets are absent.
+      - name: Import code-signing certificate
+        env:
+          CERT_P12: ${{ secrets.MAC_SIGNING_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.MAC_SIGNING_CERT_PASSWORD }}
+        run: |
+          if [ -z "$CERT_P12" ]; then
+            echo "::warning::MAC_SIGNING_CERT_P12 is not set, the app will be ad-hoc signed."
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 24)
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "CLIPPO_SIGN_IDENTITY=Clippo Code Signing" >> "$GITHUB_ENV"
 
       # Publishing is owned by the publish job below, so electron-builder must
       # never upload on its own (it would on a tagged CI build otherwise).

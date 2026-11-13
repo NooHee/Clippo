@@ -10,9 +10,21 @@ export interface PasteServiceDeps {
   activation: AppActivation;
   /** Sends Cmd+V to the frontmost app; resolves false if it could not. */
   sendPasteKeystroke: () => Promise<boolean>;
+  /**
+   * Whether macOS lets Clippo synthesize keystrokes (Accessibility permission). Without it macOS
+   * drops the events silently, so this must be checked up front rather than inferred afterwards.
+   */
+  hasAccessibilityPermission: () => boolean;
+  /** Tells the user how to fix a missing or stale Accessibility permission. */
+  onAccessibilityMissing: () => void;
+  /**
+   * Gives the previous app a moment to make its window key again after macOS reports that
+   * Clippo resigned. Injected so tests never wait on real time.
+   */
+  waitForFocusToSettle: () => Promise<void>;
   /** Only macOS supports giving focus back and synthesizing the keystroke. */
   isAutoPasteSupported: boolean;
-  logger?: Pick<Console, 'warn'>;
+  logger?: Pick<Console, 'warn' | 'info'>;
 }
 
 /**
@@ -46,16 +58,28 @@ export class PasteService {
   }
 
   private async runPasteSequence(): Promise<PasteResult> {
+    const { logger } = this.deps;
     await this.deps.hidePopup();
     if (!this.deps.isAutoPasteSupported) return 'copied';
+
+    if (!this.deps.hasAccessibilityPermission()) {
+      // Return focus anyway so the user can press Cmd+V right where they were.
+      await this.handFocusBack();
+      logger?.warn('[Clippo] Accessibility permission missing or stale, entry copied but not pasted.');
+      this.deps.onAccessibilityMissing();
+      return 'copied';
+    }
 
     const focusReturned = await this.handFocusBack();
     if (!focusReturned) {
       // Sending Cmd+V now could paste into the wrong place; leaving it on the clipboard is safer.
-      this.deps.logger?.warn('[Clippo] Previous app did not regain focus in time, skipping auto-paste.');
+      logger?.warn('[Clippo] Previous app did not regain focus in time, skipping auto-paste.');
       return 'copied';
     }
-    return (await this.deps.sendPasteKeystroke()) ? 'pasted' : 'copied';
+    await this.deps.waitForFocusToSettle();
+    const sent = await this.deps.sendPasteKeystroke();
+    logger?.info(`[Clippo] Paste ${sent ? 'sent' : 'failed'}.`);
+    return sent ? 'pasted' : 'copied';
   }
 
   private async handFocusBack(): Promise<boolean> {
