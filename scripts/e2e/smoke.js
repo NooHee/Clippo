@@ -69,6 +69,21 @@ app.whenReady().then(async () => {
   const imageRows = await js(`document.querySelectorAll('.item-image').length`);
   check('the unchanged image is recorded only once across poll ticks', imageRows === 1, `(${imageRows} rows)`);
 
+  // Accessibility warning: off macOS the state is "unsupported", so no banner. Main pushes state
+  // changes over IPC; simulate a revoked and then restored permission and check the banner follows.
+  const bannerText = () => js(`document.querySelector('.accessibility-banner')?.textContent ?? null`);
+  check('no Accessibility banner where auto-paste is unsupported', (await bannerText()) === null);
+  win.webContents.send('accessibility-changed', 'missing');
+  await sleep(150);
+  const shown = await bannerText();
+  check('Accessibility banner appears when the permission is lost', shown !== null && shown.includes('⌘V'), JSON.stringify(shown));
+  if (process.env.CLIPPO_E2E_SCREENSHOT) {
+    require('node:fs').writeFileSync(process.env.CLIPPO_E2E_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
+  }
+  win.webContents.send('accessibility-changed', 'granted');
+  await sleep(150);
+  check('Accessibility banner clears by itself once the permission is back', (await bannerText()) === null);
+
   await js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
   const t1 = Date.now(); while (win.isVisible() && Date.now() - t1 < 2000) await sleep(2);
   check('Escape dismisses the popup', !win.isVisible());
