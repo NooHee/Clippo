@@ -1,5 +1,10 @@
 name: Build & Release
 
+# One pipeline for every change:
+#   pull request  -> test, build (packaging check)
+#   push to main  -> test, build, then release-please either updates the open
+#                    release PR or, when that PR was just merged, tags the
+#                    release and the publish job attaches the macOS builds.
 on:
   push:
     branches:
@@ -10,6 +15,12 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Superseded PR runs are cancelled; runs on main always finish so a release
+  # is never left half published.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -55,11 +66,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Publishing is owned by the publish job below, so electron-builder must
+      # never upload on its own (it would on a tagged CI build otherwise).
       - name: Build & package
-        run: npm run dist
+        run: npm run dist -- --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -68,44 +80,71 @@ jobs:
           path: |
             release/*.dmg
             release/*.zip
+          if-no-files-found: error
           retention-days: 1
 
-  release:
+  release-please:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      # Reads release-please-config.json and .release-please-manifest.json.
+      # A RELEASE_PLEASE_TOKEN secret (fine-grained PAT or GitHub App token) is
+      # optional: with it, CI also runs on the release PR, which events created
+      # by the default GITHUB_TOKEN never trigger.
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+      VERSION: ${{ needs.release-please.outputs.version }}
+
+    steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: dist-files
           path: release/
 
-      - name: Get version
-        id: pkg
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      # The build job ran on the release commit, so the binaries must carry the
+      # version release-please just tagged. Fail loudly if they do not.
+      - name: Check artifact version
+        run: |
+          ls -l release/
+          ls release/*"-${VERSION}"*.dmg release/*"-${VERSION}"*-mac.zip
 
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.pkg.outputs.version }}
-          name: Clippo v${{ steps.pkg.outputs.version }}
-          body: |
-            Automated build from commit ${{ github.sha }}
+      - name: Attach builds to the release
+        run: gh release upload "$TAG" release/*.dmg release/*.zip --clobber
 
-            **Download the right file for your Mac:**
-            - `Clippo-*-arm64-mac.zip` → Apple Silicon (M1/M2/M3/M4) — unzip and drag to Applications
-            - `Clippo-*.dmg` → Intel Mac
+      - name: Add download instructions to the release notes
+        run: |
+          gh release view "$TAG" --json body --jq .body > notes.md
+          cat >> notes.md <<'NOTES'
 
-            > First launch: right-click the app → Open to bypass Gatekeeper.
-          files: |
-            release/*.dmg
-            release/*.zip
-          draft: false
-          prerelease: false
+          ### Download
+
+          - `Clippo-*-arm64-mac.zip`: Apple Silicon (M1 and later). Unzip it and drag Clippo to Applications.
+          - `Clippo-*.dmg`: Intel Mac.
+
+          First launch: right-click the app and choose Open to get past Gatekeeper (the app is not notarized).
+          NOTES
+          gh release edit "$TAG" --notes-file notes.md

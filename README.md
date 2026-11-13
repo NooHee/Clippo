@@ -46,10 +46,19 @@ Without this, clipboard is still written — you just paste manually with `Cmd+V
 ## Build (distributable .dmg)
 
 ```bash
-npm run pack
+npm run dist
 ```
 
 Output goes to `release/`.
+
+## Versioning and releases
+
+Versions are bumped automatically. Pull request titles follow
+[Conventional Commits](https://www.conventionalcommits.org/) (`feat: ...`, `fix: ...`, `feat!: ...`),
+and [release-please](https://github.com/googleapis/release-please) turns the commits on `main` into a
+release PR that bumps `package.json`, updates [CHANGELOG.md](CHANGELOG.md) and, once merged, tags the
+release and attaches the macOS builds. Never edit the version by hand. Details and trade-offs:
+[docs/release-process.md](docs/release-process.md).
 
 ## Testing
 
