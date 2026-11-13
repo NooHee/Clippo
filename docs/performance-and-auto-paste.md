@@ -292,7 +292,8 @@ why paste "worked on my machine" during development.
    `afterPack` hook). With a certificate, the designated requirement becomes
    `identifier "com.clippo.app" and certificate leaf = H"<certificate hash>"`, which is identical
    for every release, so the Accessibility grant survives updates. The certificate is a free
-   self-signed one created once with `scripts/mac/create-signing-cert.sh`; CI imports it from two
+   self-signed one created once with `openssl` (RSA key, `codeSigning` extended key usage, exported
+   as a .p12); CI imports it from two
    repository secrets into a throwaway keychain. Without the secrets (forks, local builds) the hook
    falls back to ad-hoc signing and logs a warning. The build log prints the designated
    requirement so it can be compared across releases.

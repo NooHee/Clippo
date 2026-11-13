@@ -66,7 +66,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Imports the stable self-signed certificate (see scripts/mac/create-signing-cert.sh) into a
+      # Imports the stable self-signed certificate (MAC_SIGNING_CERT_* secrets) into a
       # throwaway keychain, so scripts/mac/sign.js signs every build with the same identity and
       # users keep their Accessibility permission across updates. Skipped when secrets are absent.
       - name: Import code-signing certificate

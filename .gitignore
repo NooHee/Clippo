@@ -7,4 +7,3 @@ release/
 .DS_Store
 TODO
 vite.config.mts.timestamp-*
-clippo-signing/

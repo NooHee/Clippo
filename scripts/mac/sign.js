@@ -8,7 +8,7 @@
 // `identifier "com.clippo.app" and certificate leaf = H"<cert hash>"`, which does not change
 // between builds, so the permission survives updates.
 //
-// The certificate is a free self-signed one (scripts/mac/create-signing-cert.sh), imported into
+// The certificate is a free self-signed one (created once with openssl, kept out of the repo), imported into
 // the CI keychain from repository secrets. When it is missing (local builds, forks) the app is
 // ad-hoc signed as before, which Apple Silicon requires to launch at all.
 const { execFileSync } = require('node:child_process');
