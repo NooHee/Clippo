@@ -52,6 +52,7 @@ const en = {
       history: 'History',
       privacy: 'Privacy',
       backup: 'Backup',
+      updates: 'Updates',
       danger: 'Danger Zone',
     },
     theme: {
@@ -100,6 +101,23 @@ const en = {
     clearHistoryLabel: 'Clear history',
     clearHistory: 'Clear all unpinned items',
     clearHistoryConfirm: 'This will delete all unpinned clipboard history. This action cannot be undone.',
+    updates: {
+      autoCheck: 'Check for updates automatically',
+      version: 'Version {{version}}',
+      checkNow: 'Check now',
+      checking: 'Checking…',
+      upToDate: 'You are on the latest version.',
+      available: 'Version {{version}} is available.',
+      error: 'Could not reach GitHub. Try again later.',
+      download: 'Download',
+      releaseNotes: 'Release notes',
+    },
+  },
+  update: {
+    available: 'Clippo {{version}} is available',
+    download: 'Download',
+    releaseNotes: "What's new",
+    skip: 'Skip this version',
   },
 } as const;
 

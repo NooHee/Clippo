@@ -11,6 +11,7 @@ A minimal clipboard history manager for macOS — inspired by Ditto.
 - Pin important entries
 - Click an entry to paste it straight into the text field you were typing in
 - Lives in the menu bar, out of your way
+- Tells you when a new version is out and links to the right download for your Mac
 
 ## Setup
 
@@ -59,6 +60,10 @@ and [release-please](https://github.com/googleapis/release-please) turns the com
 release PR that bumps `package.json`, updates [CHANGELOG.md](CHANGELOG.md) and, once merged, tags the
 release and attaches the macOS builds. Never edit the version by hand. Details and trade-offs:
 [docs/release-process.md](docs/release-process.md).
+
+The app checks GitHub Releases for a newer version (at most every 6 hours, can be turned off in
+Settings) and shows a banner, a notification and a menu item with a download link. How it works and
+why it does not self-install yet: [docs/update-notifications.md](docs/update-notifications.md).
 
 ## Testing
 

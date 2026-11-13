@@ -19,6 +19,14 @@ describe('parseSettings', () => {
     expect(parsed.ignoredApps).toEqual(['A']);
   });
 
+  it('reads the update settings and drops an empty skipped version', () => {
+    expect(parseSettings({ checkForUpdates: false, skippedUpdateVersion: '0.3.0' })).toMatchObject({
+      checkForUpdates: false,
+      skippedUpdateVersion: '0.3.0',
+    });
+    expect(parseSettings({ checkForUpdates: 'no', skippedUpdateVersion: '' })).toEqual(DEFAULT_SETTINGS);
+  });
+
   it('rejects a non-object payload', () => {
     expect(() => parseSettings('nope')).toThrow();
   });

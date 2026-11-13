@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import type { Settings } from '../../shared/types';
+import type { Settings, UpdateStatus } from '../../shared/types';
 import { DEFAULT_SETTINGS } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
 import { changeLanguage } from '../../i18n';
@@ -7,6 +7,8 @@ import { changeLanguage } from '../../i18n';
 interface Props {
   onClose: () => void;
   onClearHistory: () => void;
+  updateStatus: UpdateStatus | null;
+  onCheckForUpdates: () => Promise<void>;
 }
 
 function formatHotkey(hotkey: string): string {
@@ -38,7 +40,7 @@ function captureHotkey(e: KeyboardEvent): string | null {
   return [...modifiers, key].join('+');
 }
 
-export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory }) => {
+export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory, updateStatus, onCheckForUpdates }) => {
   const { translate } = useLocalization();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [recording, setRecording] = useState(false);
@@ -305,6 +307,34 @@ export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory }) => {
       </div>
 
       <div className="settings-section">
+        <div className="settings-section-label">{translate('settings.sections.updates')}</div>
+        <div className="settings-row">
+          <span className="settings-row-label">{translate('settings.updates.autoCheck')}</span>
+          <button
+            className={`toggle ${settings.checkForUpdates ? 'on' : ''}`}
+            onClick={() => setSettings((s) => ({ ...s, checkForUpdates: !s.checkForUpdates }))}
+            role="switch"
+            aria-checked={settings.checkForUpdates}
+          >
+            <span className="toggle-thumb" />
+          </button>
+        </div>
+        <div className="settings-row">
+          <span className="settings-row-label">
+            {translate('settings.updates.version', { version: updateStatus?.currentVersion ?? '' })}
+          </span>
+          <button
+            className="settings-update-btn"
+            onClick={() => void onCheckForUpdates()}
+            disabled={updateStatus?.state === 'checking'}
+          >
+            {updateStatus?.state === 'checking' ? translate('settings.updates.checking') : translate('settings.updates.checkNow')}
+          </button>
+        </div>
+        <UpdateStatusLine status={updateStatus} />
+      </div>
+
+      <div className="settings-section">
         <div className="settings-section-label" style={{ color: 'var(--danger)' }}>{translate('settings.sections.danger')}</div>
         <div className="settings-row">
           <span className="settings-row-label">{translate('settings.clearHistoryLabel')}</span>
@@ -327,4 +357,32 @@ export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory }) => {
       </div>
     </div>
   );
+};
+
+/** Result of the last check, under the "Check now" button. */
+const UpdateStatusLine: React.FC<{ status: UpdateStatus | null }> = ({ status }) => {
+  const { translate } = useLocalization();
+  if (!status) return null;
+
+  switch (status.state) {
+    case 'up-to-date':
+      return <p className="settings-update-status">{translate('settings.updates.upToDate')}</p>;
+    case 'error':
+      return <p className="settings-update-status error">{translate('settings.updates.error')}</p>;
+    case 'available':
+      return (
+        <p className="settings-update-status available">
+          {translate('settings.updates.available', { version: status.update.version })}{' '}
+          <button className="settings-update-link" onClick={() => void window.clipstack.openUpdateLink('download')}>
+            {translate('settings.updates.download')}
+          </button>
+          {' · '}
+          <button className="settings-update-link" onClick={() => void window.clipstack.openUpdateLink('release-notes')}>
+            {translate('settings.updates.releaseNotes')}
+          </button>
+        </p>
+      );
+    default:
+      return null;
+  }
 };

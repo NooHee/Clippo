@@ -20,6 +20,10 @@ export function parseSettings(json: unknown): Settings {
   if (Array.isArray(json.ignoredApps)) settings.ignoredApps = json.ignoredApps.filter(isString);
   if (json.language === 'en' || json.language === 'fr') settings.language = json.language;
   if (typeof json.onboardingCompleted === 'boolean') settings.onboardingCompleted = json.onboardingCompleted;
+  if (typeof json.checkForUpdates === 'boolean') settings.checkForUpdates = json.checkForUpdates;
+  if (isString(json.skippedUpdateVersion) && json.skippedUpdateVersion) {
+    settings.skippedUpdateVersion = json.skippedUpdateVersion;
+  }
 
   return settings;
 }

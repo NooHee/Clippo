@@ -6,7 +6,9 @@ import { ClipboardList } from './components/ClipboardList';
 import { GroupsView } from './components/GroupsView';
 import { GroupPicker } from './components/GroupPicker';
 import { SettingsPanel } from './components/SettingsPanel';
+import { UpdateBanner } from './components/UpdateBanner';
 import { useClipboardHistory } from './hooks/useClipboardHistory';
+import { useUpdateStatus } from './hooks/useUpdateStatus';
 import { Settings, X } from 'lucide-react';
 import type { ClipboardEntry } from '../shared/types';
 import './styles.css';
@@ -16,6 +18,7 @@ type Tab = 'history' | 'groups';
 const App: React.FC = () => {
   const { translate } = useLocalization();
   const { entries, query, setQuery, resetForNextOpen, paste, remove, pin, clearAll, loading } = useClipboardHistory();
+  const updates = useUpdateStatus();
   const [tab, setTab] = useState<Tab>('history');
   const [showSettings, setShowSettings] = useState(false);
   const [pickerEntry, setPickerEntry] = useState<ClipboardEntry | null>(null);
@@ -81,9 +84,15 @@ const App: React.FC = () => {
       </div>
 
       {showSettings ? (
-        <SettingsPanel onClose={() => { setShowSettings(false); void applyAppearance(); }} onClearHistory={clearAll} />
+        <SettingsPanel
+          onClose={() => { setShowSettings(false); void applyAppearance(); }}
+          onClearHistory={clearAll}
+          updateStatus={updates.status}
+          onCheckForUpdates={updates.checkNow}
+        />
       ) : (
         <>
+          <UpdateBanner status={updates.status} />
           <div className="tab-bar">
             <button
               className={`tab-btn ${tab === 'history' ? 'active' : ''}`}

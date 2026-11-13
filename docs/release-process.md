@@ -143,5 +143,7 @@ These are GitHub settings, not files, so they are listed here.
 - The builds are not code signed or notarized (`CSC_IDENTITY_AUTO_DISCOVERY: false`), so users still
   need right-click > Open on first launch. Signing would slot into the `build` job with an Apple
   Developer certificate stored as secrets.
-- No auto-update channel yet. Because releases now have reliable, increasing versions and consistent
-  asset names, adding `electron-updater` later is straightforward.
+- The app notifies users about new releases and links to the right download (see
+  [update-notifications.md](update-notifications.md)), but cannot install them by itself until the
+  builds are signed. That relies on what this pipeline guarantees: increasing SemVer tags and
+  consistent asset names (`Clippo-X.Y.Z.dmg`, `Clippo-X.Y.Z-arm64-mac.zip`).

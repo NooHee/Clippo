@@ -52,6 +52,7 @@ const fr = {
       history: 'Historique',
       privacy: 'Confidentialité',
       backup: 'Sauvegarde',
+      updates: 'Mises à jour',
       danger: 'Zone dangereuse',
     },
     theme: {
@@ -100,6 +101,23 @@ const fr = {
     clearHistoryLabel: 'Effacer l\'historique',
     clearHistory: 'Supprimer tous les éléments non épinglés',
     clearHistoryConfirm: 'Cela supprimera tout l\'historique du presse-papiers non épinglé. Cette action ne peut pas être annulée.',
+    updates: {
+      autoCheck: 'Rechercher les mises à jour automatiquement',
+      version: 'Version {{version}}',
+      checkNow: 'Vérifier',
+      checking: 'Vérification…',
+      upToDate: 'Vous avez la dernière version.',
+      available: 'La version {{version}} est disponible.',
+      error: 'Impossible de joindre GitHub. Réessayez plus tard.',
+      download: 'Télécharger',
+      releaseNotes: 'Notes de version',
+    },
+  },
+  update: {
+    available: 'Clippo {{version}} est disponible',
+    download: 'Télécharger',
+    releaseNotes: 'Nouveautés',
+    skip: 'Ignorer cette version',
   },
 };
 

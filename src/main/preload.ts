@@ -35,6 +35,11 @@ const IPC = {
   OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings',
   POPUP_WILL_HIDE: 'popup-will-hide',
   POPUP_RESET_DONE: 'popup-reset-done',
+  GET_UPDATE_STATUS: 'get-update-status',
+  CHECK_FOR_UPDATES: 'check-for-updates',
+  OPEN_UPDATE_LINK: 'open-update-link',
+  SKIP_UPDATE: 'skip-update',
+  UPDATE_STATUS_CHANGED: 'update-status-changed',
 } as const;
 
 contextBridge.exposeInMainWorld('clipstack', {
@@ -131,6 +136,24 @@ contextBridge.exposeInMainWorld('clipstack', {
 
   /** Tells main the reset frame is painted and the window can be hidden. */
   notifyPopupResetDone: () => ipcRenderer.send(IPC.POPUP_RESET_DONE),
+
+  getUpdateStatus: () =>
+    ipcRenderer.invoke(IPC.GET_UPDATE_STATUS),
+
+  checkForUpdates: () =>
+    ipcRenderer.invoke(IPC.CHECK_FOR_UPDATES),
+
+  openUpdateLink: (link: 'download' | 'release-notes') =>
+    ipcRenderer.invoke(IPC.OPEN_UPDATE_LINK, link),
+
+  skipUpdate: () =>
+    ipcRenderer.invoke(IPC.SKIP_UPDATE),
+
+  onUpdateStatusChanged: (callback: (status: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);
+    ipcRenderer.on(IPC.UPDATE_STATUS_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC.UPDATE_STATUS_CHANGED, handler);
+  },
 
   onClipboardUpdated: (callback: (entry: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, entry: unknown) => callback(entry);
