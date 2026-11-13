@@ -6,3 +6,4 @@ release/
 *.db-wal
 .DS_Store
 TODO
+vite.config.mts.timestamp-*

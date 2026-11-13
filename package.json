@@ -9,9 +9,15 @@
     "build": "npm run build:main && npm run build:renderer",
     "dev": "concurrently -k \"vite\" \"npm run build:main && wait-on http://localhost:5173 && NODE_ENV=development electron .\"",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder --mac"
+    "dist": "npm run build && electron-builder --mac",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:e2e": "npm run build && node scripts/e2e/run.js",
+    "bench:startup": "npm run build && scripts/perf/bench-startup.sh 7"
   },
   "devDependencies": {
+    "@fontsource/dm-mono": "^5.3.0",
+    "@fontsource/dm-sans": "^5.3.0",
     "@types/node": "^20.11.5",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
@@ -19,10 +25,14 @@
     "concurrently": "^8.2.2",
     "electron": "^28.2.0",
     "electron-builder": "^25.0.0",
+    "i18next": "^26.0.4",
+    "lucide-react": "^1.8.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-i18next": "^17.0.2",
     "typescript": "^5.3.3",
     "vite": "^5.0.12",
+    "vitest": "^3.2.7",
     "wait-on": "^9.0.4"
   },
   "build": {
@@ -45,7 +55,10 @@
             "arm64"
           ]
         }
-      ]
+      ],
+      "extendInfo": {
+        "LSUIElement": true
+      }
     },
     "dmg": {
       "title": "Install Clippo",
@@ -70,15 +83,5 @@
     "directories": {
       "output": "release"
     }
-  },
-  "dependencies": {
-    "@chakra-ui/react": "^3.36.0",
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.1",
-    "framer-motion": "^12.40.0",
-    "i18next": "^26.0.4",
-    "lucide-react": "^1.8.0",
-    "react-i18next": "^17.0.2",
-    "react-window": "^2.2.7"
   }
 }
