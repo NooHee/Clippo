@@ -10,19 +10,31 @@ if (!app.dock) app.dock = { setIcon() {}, hide() {}, show() {} };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${name} ${extra}`);
+/** Polls until `probe` returns a truthy value (or the timeout), so slow CI machines do not flake. */
+async function waitFor(probe, timeoutMs = 10000) {
+  const start = Date.now();
+  for (;;) {
+    const value = await probe();
+    if (value || Date.now() - start > timeoutMs) return value;
+    await sleep(25);
+  }
+}
 app.whenReady().then(async () => {
-  await sleep(2500);
-  const win = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html'));
+  const win = await waitFor(() => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('index.html')));
   const js = (code) => win.webContents.executeJavaScript(code);
+  const previews = () => js(`[...document.querySelectorAll('.item-preview')].map(e => e.textContent)`);
+  // Wait until the renderer has mounted and subscribed to live updates.
+  await waitFor(() => !win.webContents.isLoading() && js(`!!document.querySelector('.empty-state, .clipboard-list')`).catch(() => false));
   check('only the popup window exists at startup (tooltip is lazy)', BrowserWindow.getAllWindows().length === 1);
 
   clipboard.writeText('first copied text');
-  await sleep(700);
+  await waitFor(async () => (await previews()).includes('first copied text'));
   clipboard.writeText('second copied text');
-  await sleep(700);
   win.show(); win.focus();
-  await sleep(300);
-  const items = await js(`[...document.querySelectorAll('.item-preview')].map(e => e.textContent)`);
+  const items = await waitFor(async () => {
+    const current = await previews();
+    return current[0] === 'second copied text' ? current : null;
+  }) ?? (await previews());
   check('new copies appear live in the list, newest first', items[0] === 'second copied text' && items[1] === 'first copied text', JSON.stringify(items));
 
   // Type a search query through React's input
