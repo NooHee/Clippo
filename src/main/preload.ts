@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-// IPC channel constants inlined — preload cannot import from shared modules
+// IPC channel names are inlined because the preload runs sandboxed (sandbox: true), and a
+// sandboxed preload can only require('electron'), not our own modules. Keep in sync with
+// src/shared/types.ts.
 const IPC = {
   GET_HISTORY: 'get-history',
   PASTE_ENTRY: 'paste-entry',
@@ -31,6 +33,8 @@ const IPC = {
   CHECK_PERMISSIONS: 'check-permissions',
   COMPLETE_ONBOARDING: 'complete-onboarding',
   OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings',
+  POPUP_WILL_HIDE: 'popup-will-hide',
+  POPUP_RESET_DONE: 'popup-reset-done',
 } as const;
 
 contextBridge.exposeInMainWorld('clipstack', {
@@ -118,18 +122,15 @@ contextBridge.exposeInMainWorld('clipstack', {
   openAccessibilitySettings: () =>
     ipcRenderer.invoke(IPC.OPEN_ACCESSIBILITY_SETTINGS),
 
-  onWindowHidden: (callback: () => void) => {
+  /** Main asks the UI to reset before the popup hides, so the next open shows a fresh view. */
+  onPopupWillHide: (callback: () => void) => {
     const handler = () => callback();
-    ipcRenderer.on('window-hidden', handler);
-    return () => ipcRenderer.removeListener('window-hidden', handler);
+    ipcRenderer.on(IPC.POPUP_WILL_HIDE, handler);
+    return () => ipcRenderer.removeListener(IPC.POPUP_WILL_HIDE, handler);
   },
 
-  onWindowWillHide: (callback: () => void) => {
-    const handler = () => callback();
-    ipcRenderer.on('window-will-hide', handler);
-    return () => ipcRenderer.removeListener('window-will-hide', handler);
-  },
-
+  /** Tells main the reset frame is painted and the window can be hidden. */
+  notifyPopupResetDone: () => ipcRenderer.send(IPC.POPUP_RESET_DONE),
 
   onClipboardUpdated: (callback: (entry: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, entry: unknown) => callback(entry);

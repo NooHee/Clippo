@@ -15,32 +15,26 @@ type Tab = 'history' | 'groups';
 
 const App: React.FC = () => {
   const { translate } = useLocalization();
-  const { entries, query, setQuery, paste, remove, pin, clearAll, loading } = useClipboardHistory();
+  const { entries, query, setQuery, resetForNextOpen, paste, remove, pin, clearAll, loading } = useClipboardHistory();
   const [tab, setTab] = useState<Tab>('history');
   const [showSettings, setShowSettings] = useState(false);
   const [pickerEntry, setPickerEntry] = useState<ClipboardEntry | null>(null);
 
-  const applyTheme = useCallback(() => {
-    window.clipstack.getSettings().then((s) => {
-      const root = document.documentElement;
-      if (s.theme === 'system') {
-        root.removeAttribute('data-theme');
-      } else {
-        root.setAttribute('data-theme', s.theme);
-      }
-    });
-  }, []);
-
-  const applyLanguage = useCallback(() => {
-    window.clipstack.getSettings().then((s) => {
-      changeLanguage(s.language);
-    });
+  // One settings round trip on mount (and after the settings panel closes) instead of one per concern.
+  const applyAppearance = useCallback(async () => {
+    const settings = await window.clipstack.getSettings();
+    const root = document.documentElement;
+    if (settings.theme === 'system') {
+      root.removeAttribute('data-theme');
+    } else {
+      root.setAttribute('data-theme', settings.theme);
+    }
+    changeLanguage(settings.language);
   }, []);
 
   useEffect(() => {
-    applyTheme();
-    applyLanguage();
-  }, [applyTheme, applyLanguage]);
+    void applyAppearance();
+  }, [applyAppearance]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -50,26 +44,19 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  // Before the popup hides, reset the UI and confirm once that frame is painted, so the next
+  // open shows a fresh view immediately instead of flashing the previous state.
   useEffect(() => {
-    const unsubscribeHidden = window.clipstack.onWindowHidden(() => {
-      window.clipstack.hideTooltip();
-    });
-
-    // Window is transparent (opacity=0) but still composited — reset state now
-    // so Chromium paints the correct frame before the window actually hides.
-    const unsubscribeWillHide = window.clipstack.onWindowWillHide(() => {
+    return window.clipstack.onPopupWillHide(async () => {
       setShowSettings(false);
       setPickerEntry(null);
       setTab('history');
-      setQuery('');
       window.clipstack.hideTooltip();
+      await resetForNextOpen();
+      // Two frames: the first callback runs before the committed state is painted, the second after.
+      requestAnimationFrame(() => requestAnimationFrame(() => window.clipstack.notifyPopupResetDone()));
     });
-
-    return () => {
-      unsubscribeHidden();
-      unsubscribeWillHide();
-    };
-  }, []);
+  }, [resetForNextOpen]);
 
   return (
     <div className="app">
@@ -94,7 +81,7 @@ const App: React.FC = () => {
       </div>
 
       {showSettings ? (
-        <SettingsPanel onClose={() => { setShowSettings(false); applyTheme(); applyLanguage(); }} onClearHistory={clearAll} />
+        <SettingsPanel onClose={() => { setShowSettings(false); void applyAppearance(); }} onClearHistory={clearAll} />
       ) : (
         <>
           <div className="tab-bar">
