@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/NooHee/Clippo/compare/v0.3.0...v0.4.0) (2026-11-13)
+
+
+### Features
+
+* warn when Accessibility access is missing ([#29](https://github.com/NooHee/Clippo/issues/29)) ([5be3fe9](https://github.com/NooHee/Clippo/commit/5be3fe9c6055d837045a7bb634e45c67ba3b14e3))
+
+
+### Bug Fixes
+
+* keep auto-paste working across updates ([#25](https://github.com/NooHee/Clippo/issues/25)) ([1b0b744](https://github.com/NooHee/Clippo/commit/1b0b744c3d5997a76236e71e0314a1e46ed8d45b))
+
 ## [0.3.0](https://github.com/NooHee/Clippo/compare/v0.2.1...v0.3.0) (2026-11-13)
 
 
