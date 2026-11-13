@@ -22,6 +22,7 @@ export const ImagePreview: React.FC<ImagePreviewProps> = ({ imageName, createdAt
         src={imagePath}
         alt="clipboard item"
         className="item-image"
+        decoding="async"
       />
       <span className="item-time">{new Date(createdAt).toLocaleDateString()}</span>
     </div>

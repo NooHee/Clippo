@@ -1,300 +1,194 @@
-import { ipcMain, BrowserWindow, app, dialog, screen } from 'electron';
-import fs from 'fs';
-import { IPC } from '../shared/types';
-import type { Settings } from '../shared/types';
-import { getHistory, deleteEntry, togglePin, clearHistory, incrementUsage, insertEntry } from './db';
-import { ClipboardService } from './clipboard';
-import { loadSettings, saveSettings } from './settings';
-import { getGroups, createGroup, deleteGroup, renameGroup, addEntryToGroup, removeEntryFromGroup } from './groups';
-import type { ClipboardEntryType } from '../shared/types';
-import { hideWindowGracefully, restoreFocusAndPaste } from './index';
-import { pasteImageToClipboard, getImagePath, getThumbnailPath } from './imageHandler';
+import fs from 'node:fs/promises';
+import { dialog, ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { IPC, type PasteResult, type Settings } from '../shared/types';
+import type { HistoryRepository } from './storage/historyRepository';
+import { isEntryType } from './storage/historyRepository';
+import type { SettingsRepository } from './storage/settingsRepository';
+import { parseSettings } from './storage/settingsRepository';
+import type { GroupRepository } from './storage/groupRepository';
+import { isFiniteNumber, isString } from './storage/guards';
+import { importHistory } from './storage/historyImport';
+import type { ImageStore } from './clipboard/imageStore';
+import type { PopupWindow } from './windows/popupWindow';
+import type { TooltipWindow } from './windows/tooltipWindow';
+import type { PasteService } from './paste/pasteService';
 import { checkPermissions } from './permissionChecker';
+import { openAccessibilitySettings } from './platform/macos';
+import { perfMark } from './platform/perf';
 
-export function registerIpcHandlers(
-  window: BrowserWindow,
-  tooltipWindow: BrowserWindow,
-  clipboardService: ClipboardService,
-  onSettingsChange: (settings: Settings) => void
-): void {
-  ipcMain.handle(IPC.GET_HISTORY, (_event, query?: string) => {
-    return getHistory(query);
+export interface IpcDependencies {
+  popup: PopupWindow;
+  tooltip: TooltipWindow;
+  history: HistoryRepository;
+  settings: SettingsRepository;
+  groups: GroupRepository;
+  images: ImageStore;
+  paste: PasteService;
+  /** Writes text to the clipboard without the watcher recording it as a new entry. */
+  writeText: (text: string) => void;
+  /** Same for images; returns false if the image file is gone. */
+  writeImage: (imageName: string) => boolean;
+  onSettingsSaved: (settings: Settings) => void;
+}
+
+type Handler = (...args: unknown[]) => unknown;
+
+/**
+ * Registers a handler that only accepts calls from our own popup window.
+ * Arguments arrive from the renderer, so every handler validates them before use.
+ */
+function handle(channel: string, trustedSender: WebContents, handler: Handler): void {
+  ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+    if (event.sender !== trustedSender) throw new Error(`Rejected IPC call on ${channel}`);
+    return handler(...args);
+  });
+}
+
+function requireId(value: unknown): number {
+  if (!isFiniteNumber(value)) throw new TypeError('Expected a numeric id');
+  return value;
+}
+
+function requireString(value: unknown): string {
+  if (!isString(value)) throw new TypeError('Expected a string');
+  return value;
+}
+
+export function registerIpcHandlers(deps: IpcDependencies): void {
+  const { popup, tooltip, history, settings, groups, images, paste } = deps;
+  const parent: BrowserWindow = popup.browserWindow;
+  const popupContents = parent.webContents;
+  const on = (channel: string, handler: Handler): void => handle(channel, popupContents, handler);
+
+  // History
+  on(IPC.GET_HISTORY, (query) => history.list(isString(query) ? query : ''));
+  on(IPC.SEARCH_HISTORY, (query) => history.list(requireString(query)));
+  on(IPC.DELETE_ENTRY, (id) => history.delete(requireId(id)));
+  on(IPC.PIN_ENTRY, (id) => history.togglePin(requireId(id)));
+  on(IPC.CLEAR_HISTORY, () => history.clearUnpinned());
+
+  // Paste
+  on(IPC.PASTE_ENTRY, async (id, content): Promise<PasteResult> => {
+    const done = perfMark('paste.text');
+    history.markUsed(requireId(id));
+    deps.writeText(requireString(content));
+    const result = await paste.pasteIntoPreviousApp();
+    done();
+    return result;
+  });
+  on(IPC.PASTE_GROUP_ENTRY, async (content): Promise<PasteResult> => {
+    deps.writeText(requireString(content));
+    return paste.pasteIntoPreviousApp();
+  });
+  on(IPC.PASTE_IMAGE, async (imageName): Promise<PasteResult> => {
+    if (!deps.writeImage(requireString(imageName))) return 'failed';
+    return paste.pasteIntoPreviousApp();
+  });
+  on(IPC.HIDE_WINDOW, () => paste.dismiss());
+
+  // Images
+  on(IPC.GET_IMAGE_PATH, (imageName) => {
+    try {
+      return images.thumbnailDataUrl(requireString(imageName));
+    } catch (error) {
+      console.error('[Clippo] Failed to load image thumbnail', error);
+      return null;
+    }
   });
 
-  ipcMain.handle(IPC.SEARCH_HISTORY, (_event, query: string) => {
-    return getHistory(query);
+  // Settings
+  on(IPC.GET_SETTINGS, () => settings.get());
+  on(IPC.SAVE_SETTINGS, (payload) => {
+    const saved = settings.save(parseSettings(payload));
+    deps.onSettingsSaved(saved);
   });
-
-  ipcMain.handle(IPC.PASTE_ENTRY, (_event, id: number, content: string) => {
-    incrementUsage(id);
-    clipboardService.writeToClipboard(content);
-    hideWindowGracefully(window, () => simulatePaste());
+  on(IPC.COMPLETE_ONBOARDING, () => {
+    settings.update({ onboardingCompleted: true });
   });
-
-  ipcMain.handle(IPC.DELETE_ENTRY, (_event, id: number) => {
-    deleteEntry(id);
-  });
-
-  ipcMain.handle(IPC.PIN_ENTRY, (_event, id: number) => {
-    togglePin(id);
-  });
-
-  ipcMain.handle(IPC.CLEAR_HISTORY, () => {
-    clearHistory();
-  });
-
-  ipcMain.handle(IPC.HIDE_WINDOW, () => {
-    hideWindowGracefully(window);
-  });
-
-  ipcMain.handle(IPC.GET_SETTINGS, () => {
-    return loadSettings();
-  });
-
-  ipcMain.handle(IPC.SAVE_SETTINGS, (_event, settings: Settings) => {
-    saveSettings(settings);
-    app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
-    clipboardService.updateInterval(settings.pollIntervalMs);
-    onSettingsChange(settings);
-  });
-
-  ipcMain.handle(IPC.EXPORT_SETTINGS, async () => {
-    const { filePath, canceled } = await dialog.showSaveDialog(window, {
+  on(IPC.EXPORT_SETTINGS, async () => {
+    const { filePath, canceled } = await dialog.showSaveDialog(parent, {
       defaultPath: 'clippo-settings.json',
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
     if (canceled || !filePath) return { success: false };
-    fs.writeFileSync(filePath, JSON.stringify(loadSettings(), null, 2), 'utf-8');
+    await fs.writeFile(filePath, JSON.stringify(settings.get(), null, 2), 'utf-8');
     return { success: true };
   });
-
-  ipcMain.handle(IPC.IMPORT_SETTINGS, async () => {
-    const { filePaths, canceled } = await dialog.showOpenDialog(window, {
-      filters: [{ name: 'JSON', extensions: ['json'] }],
-      properties: ['openFile'],
-    });
-    if (canceled || !filePaths[0]) return null;
+  on(IPC.IMPORT_SETTINGS, async (): Promise<Partial<Settings> | null> => {
+    const json = await pickJsonFile(parent);
+    if (json === undefined) return null;
     try {
-      const raw = fs.readFileSync(filePaths[0], 'utf-8');
-      return JSON.parse(raw) as Partial<Settings>;
+      return parseSettings(json);
     } catch {
       return null;
     }
   });
 
-  ipcMain.handle(IPC.GET_GROUPS, () => getGroups());
+  // Groups
+  on(IPC.GET_GROUPS, () => groups.list());
+  on(IPC.CREATE_GROUP, (name) => groups.create(requireString(name)));
+  on(IPC.DELETE_GROUP, (id) => groups.delete(requireId(id)));
+  on(IPC.RENAME_GROUP, (id, name) => groups.rename(requireId(id), requireString(name)));
+  on(IPC.ADD_TO_GROUP, (groupId, content, type, preview, imageName) => {
+    if (!isEntryType(type)) throw new TypeError('Invalid entry type');
+    return groups.addEntry(
+      requireId(groupId),
+      requireString(content),
+      type,
+      requireString(preview),
+      isString(imageName) ? imageName : undefined,
+    );
+  });
+  on(IPC.REMOVE_FROM_GROUP, (groupId, entryId) => groups.removeEntry(requireId(groupId), requireId(entryId)));
 
-  ipcMain.handle(IPC.CREATE_GROUP, (_event, name: string) => createGroup(name));
+  // Tooltip
+  on(IPC.SHOW_TOOLTIP, async (text) => {
+    if (!popup.isVisible()) return; // Never show a tooltip while the popup is hiding.
+    await tooltip.show(requireString(text));
+  });
+  on(IPC.HIDE_TOOLTIP, () => tooltip.hide());
 
-  ipcMain.handle(IPC.DELETE_GROUP, (_event, id: number) => deleteGroup(id));
-
-  ipcMain.handle(IPC.RENAME_GROUP, (_event, id: number, name: string) => renameGroup(id, name));
-
-  ipcMain.handle(
-    IPC.ADD_TO_GROUP,
-    (_event, groupId: number, content: string, type: ClipboardEntryType, preview: string, imageName?: string) =>
-      addEntryToGroup(groupId, content, type, preview, imageName)
-  );
-
-  ipcMain.handle(IPC.REMOVE_FROM_GROUP, (_event, groupId: number, entryId: number) =>
-    removeEntryFromGroup(groupId, entryId)
-  );
-
-  ipcMain.handle(IPC.SHOW_TOOLTIP, async (_event, text: string) => {
-    if (window.getOpacity() < 1) return;
-    const cursor = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(cursor);
-    const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
-
-    const tooltipWidth = 420;
-    const maxHeight = 460;
-    const offsetX = 14;
-
-    const escaped = JSON.stringify(text);
-    const contentHeight: number = await tooltipWindow.webContents.executeJavaScript(`
-      (function() {
-        var el = document.getElementById('wrap');
-        el.style.width = '${tooltipWidth}px';
-        el.textContent = ${escaped};
-        return Math.min(el.scrollHeight, ${maxHeight});
-      })()
-    `);
-
-    tooltipWindow.setSize(tooltipWidth, contentHeight);
-
-    // Show to the right; flip left if not enough space
-    const spaceRight = (dx + dw) - (cursor.x + offsetX);
-    let x = spaceRight >= tooltipWidth
-      ? cursor.x + offsetX
-      : cursor.x - tooltipWidth - offsetX;
-
-    // Hard clamp to always stay within screen
-    x = Math.max(dx, Math.min(x, dx + dw - tooltipWidth));
-
-    // Align top with cursor; push up if it would overflow bottom
-    let y = cursor.y;
-    if (y + contentHeight > dy + dh) y = dy + dh - contentHeight;
-    y = Math.max(dy, y);
-
-    tooltipWindow.setPosition(Math.round(x), Math.round(y));
-    tooltipWindow.showInactive();
+  // Import / export history
+  on(IPC.EXPORT_HISTORY, async () => {
+    const { filePath, canceled } = await dialog.showSaveDialog(parent, {
+      defaultPath: 'clippo-history.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    });
+    if (canceled || !filePath) return { success: false };
+    await fs.writeFile(filePath, JSON.stringify(history.list(), null, 2), 'utf-8');
+    return { success: true };
+  });
+  on(IPC.IMPORT_HISTORY, async () => {
+    const json = await pickJsonFile(parent);
+    if (json === undefined) return { success: false, imported: 0, duplicates: 0, errors: [] };
+    return importHistory(history, json);
   });
 
-  ipcMain.handle(IPC.HIDE_TOOLTIP, () => {
-    tooltipWindow.hide();
-  });
-
-  ipcMain.handle(IPC.BROWSE_FOR_APP, async () => {
-    const { filePaths, canceled } = await dialog.showOpenDialog(window, {
+  // System
+  on(IPC.BROWSE_FOR_APP, async () => {
+    const { filePaths, canceled } = await dialog.showOpenDialog(parent, {
       defaultPath: '/Applications',
       properties: ['openFile'],
       filters: [{ name: 'Applications', extensions: ['app'] }],
     });
     if (canceled || !filePaths[0]) return null;
-    const name = filePaths[0].split('/').pop()?.replace(/\.app$/, '') ?? null;
-    return name;
+    return filePaths[0].split('/').pop()?.replace(/\.app$/, '') ?? null;
   });
-
-  ipcMain.handle(IPC.PASTE_GROUP_ENTRY, (_event, content: string) => {
-    clipboardService.writeToClipboard(content);
-    hideWindowGracefully(window);
-    setTimeout(() => simulatePaste(), 230);
-  });
-
-  ipcMain.handle(IPC.EXPORT_HISTORY, async () => {
-    const { filePath, canceled } = await dialog.showSaveDialog(window, {
-      defaultPath: 'clippo-history.json',
-      filters: [{ name: 'JSON', extensions: ['json'] }],
-    });
-    if (canceled || !filePath) return { success: false };
-    const history = getHistory();
-    fs.writeFileSync(filePath, JSON.stringify(history, null, 2), 'utf-8');
-    return { success: true };
-  });
-
-  ipcMain.handle(IPC.IMPORT_HISTORY, async () => {
-    const { filePaths, canceled } = await dialog.showOpenDialog(window, {
-      filters: [{ name: 'JSON', extensions: ['json'] }],
-      properties: ['openFile'],
-    });
-    if (canceled || !filePaths[0]) return { success: false, imported: 0, duplicates: 0, errors: [] };
-
-    try {
-      const raw = fs.readFileSync(filePaths[0], 'utf-8');
-      const imported = JSON.parse(raw) as unknown[];
-
-      // Validate and import with duplicate detection
-      if (!Array.isArray(imported)) {
-        return { success: false, imported: 0, duplicates: 0, errors: ['Invalid file format: expected array'] };
-      }
-
-      const history = getHistory();
-      const existingContents = new Set(history.map((h: any) => h.content));
-      let importedCount = 0;
-      let duplicateCount = 0;
-      const errors: string[] = [];
-
-      for (let i = 0; i < imported.length; i++) {
-        try {
-          const item = imported[i];
-
-          // Validate structure
-          if (!item || typeof item !== 'object') {
-            errors.push(`Item ${i}: invalid structure`);
-            continue;
-          }
-
-          const { content, type, preview } = item as any;
-          if (!content || !type || !preview) {
-            errors.push(`Item ${i}: missing required fields`);
-            continue;
-          }
-
-          if (!['text', 'image', 'file'].includes(type)) {
-            errors.push(`Item ${i}: invalid type "${type}"`);
-            continue;
-          }
-
-          // Check for duplicates
-          if (existingContents.has(content)) {
-            duplicateCount++;
-            continue;
-          }
-
-          // Add to history
-          const result = insertEntry(content, type as ClipboardEntryType);
-          if (result) {
-            existingContents.add(content);
-            importedCount++;
-          }
-        } catch (e) {
-          errors.push(`Item ${i}: ${e instanceof Error ? e.message : 'unknown error'}`);
-        }
-      }
-
-      return { success: true, imported: importedCount, duplicates: duplicateCount, errors };
-    } catch (e) {
-      return {
-        success: false,
-        imported: 0,
-        duplicates: 0,
-        errors: [e instanceof Error ? e.message : 'unknown error'],
-      };
-    }
-  });
-
-  ipcMain.handle(IPC.GET_IMAGE_PATH, (_event, imageName: string) => {
-    try {
-      const imagePath = getThumbnailPath(imageName);
-      const exists = fs.existsSync(imagePath);
-      if (!exists) {
-        return getImagePath(imageName);
-      }
-      const imageData = fs.readFileSync(imagePath);
-      const base64 = imageData.toString('base64');
-      return `data:image/png;base64,${base64}`;
-    } catch (e) {
-      console.error('[Clippo] Failed to load image:', e);
-      return null;
-    }
-  });
-
-  ipcMain.handle(IPC.PASTE_IMAGE, (_event, imageName: string) => {
-    const success = pasteImageToClipboard(imageName);
-    if (success) {
-      hideWindowGracefully(window, () => simulatePaste());
-    }
-    return { success };
-  });
-
-  ipcMain.handle(IPC.CHECK_PERMISSIONS, () => {
-    return checkPermissions();
-  });
-
-  ipcMain.handle(IPC.COMPLETE_ONBOARDING, () => {
-    const settings = loadSettings();
-    settings.onboardingCompleted = true;
-    saveSettings(settings);
-  });
-
-  ipcMain.handle(IPC.OPEN_ACCESSIBILITY_SETTINGS, () => {
-    // Open macOS System Preferences → Security & Privacy → Accessibility
-    const { execSync } = require('child_process') as typeof import('child_process');
-    try {
-      execSync('open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"');
-    } catch (e) {
-      console.error('[Clippo] Failed to open accessibility settings:', e);
-    }
-  });
+  on(IPC.CHECK_PERMISSIONS, () => checkPermissions());
+  on(IPC.OPEN_ACCESSIBILITY_SETTINGS, () => openAccessibilitySettings());
 }
 
-function simulatePaste(): void {
+/** Opens a file picker and parses the chosen JSON file. Undefined when cancelled or unreadable. */
+async function pickJsonFile(parent: BrowserWindow): Promise<unknown> {
+  const { filePaths, canceled } = await dialog.showOpenDialog(parent, {
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || !filePaths[0]) return undefined;
   try {
-    // Uses AppleScript to trigger Cmd+V in the frontmost application
-    const { execSync } = require('child_process') as typeof import('child_process');
-    execSync(`osascript -e 'tell application "System Events" to keystroke "v" using command down'`);
+    const parsed: unknown = JSON.parse(await fs.readFile(filePaths[0], 'utf-8'));
+    return parsed;
   } catch {
-    // Accessibility permissions not granted — clipboard is still written, user pastes manually
-    console.warn('[Clippo] Could not simulate paste. Grant Accessibility permissions in System Settings.');
+    return undefined;
   }
 }
