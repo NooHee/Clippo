@@ -1,0 +1,21 @@
+name: PR title
+
+# Pull requests are squash merged and the PR title becomes the commit on main.
+# release-please reads those commits to decide the next version, so the title
+# must follow Conventional Commits (feat:, fix:, perf:, feat!: ...).
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional-title:
+    name: Conventional Commit title
+    runs-on: ubuntu-latest
+    steps:
+      # Safe with pull_request_target: no code from the PR is checked out or run.
+      - uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
