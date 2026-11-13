@@ -33,11 +33,14 @@ NODE_ENV=development npm run dev:main
 
 ## Permissions
 
-For auto-paste to work (simulating `Cmd+V` after selecting an item), grant Accessibility access:
+Auto-paste (Clippo sends `Cmd+V` after you pick an entry) needs Accessibility access:
 
-**System Settings → Privacy & Security → Accessibility → add your terminal / Clippo**
+**System Settings > Privacy & Security > Accessibility > enable Clippo**
 
-Without this, clipboard is still written — you just paste manually with `Cmd+V`.
+Without it the entry is still copied and Clippo shows a notification; paste manually with `Cmd+V`.
+If Clippo is already enabled but paste stopped working after an update, remove it with the minus
+button and add it again. Release builds are signed with a stable certificate so this should only be
+needed once; see [docs/performance-and-auto-paste.md](docs/performance-and-auto-paste.md#part-3-auto-paste-still-failed-on-a-real-mac).
 
 ## Shortcut
 

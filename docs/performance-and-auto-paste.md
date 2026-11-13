@@ -252,14 +252,83 @@ Key decisions (`src/main/paste/`):
 | --- | --- |
 | Remember the frontmost app name, re-activate it with AppleScript | Slow (process spawn on the hotkey path), restores the app but relies on it to restore the field, injection risk. This is what the old code half did. |
 | Non-activating panel (`type: 'panel'`, like Spotlight): Clippo never steals activation, so no handback is needed | Best possible UX, but Electron's panel support had keyboard and focus issues around this Electron version. Worth revisiting after an Electron upgrade. |
-| Native module posting a `CGEvent` for Cmd+V | Faster than `osascript` and only needs the Accessibility permission (not System Events automation). Adds a native build step for two architectures; a good next step, not needed for correctness. |
+| Native module posting a `CGEvent` for Cmd+V | Only needs Accessibility. Clippo now gets the same result without a native build step by posting the `CGEvent` from a JavaScript for Automation script (see Part 3). |
 
 ### Permissions
 
 Sending a keystroke requires **Accessibility** permission (System Settings, Privacy and Security,
 Accessibility). Without it the entry is still copied and `PasteResult` is `copied`. The permission
-check now uses the native `systemPreferences.isTrustedAccessibilityClient(false)` instead of
-spawning `osascript`.
+check uses the native `systemPreferences.isTrustedAccessibilityClient(false)` instead of
+spawning `osascript`. Part 3 explains why this permission kept "disappearing".
+
+---
+
+## Part 3: auto-paste still failed on a real Mac
+
+After the release, opening was fast but auto-paste still did nothing on a real install, even though
+Clippo was listed and switched **on** in System Settings, Accessibility. Removing Clippo from the
+list and adding it again fixed it immediately. That symptom points to the root cause.
+
+### Root cause: an ad-hoc signature changes with every build
+
+macOS stores privacy grants (TCC) against an app's **designated requirement**, a rule derived from
+its code signature. Clippo was released without a signing certificate, so the build was only
+*ad-hoc* signed. An ad-hoc designated requirement is essentially "the binary whose hash is X".
+Every new build has a new hash, so after an update macOS sees a different app: the old toggle is
+still displayed as ON, but it belongs to the previous binary and is no longer honoured.
+`isTrustedAccessibilityClient` returns false and synthesized keystrokes are dropped silently.
+
+A second, related problem: the paste keystroke went through
+`tell application "System Events" to keystroke "v"`. That is an Apple Event to System Events, which
+needs the **Automation** permission on top of Accessibility. macOS only asks for it when the
+responsible app declares `NSAppleEventsUsageDescription` in its Info.plist, and Electron's default
+Info.plist does not (verified in the Electron 28 macOS bundle). Packaged Clippo was refused without
+a prompt (error -1743), while `npm start` worked because Terminal was the responsible app. This is
+why paste "worked on my machine" during development.
+
+### Fixes
+
+1. **Sign every build with the same certificate** (`scripts/mac/sign.js`, an electron-builder
+   `afterPack` hook). With a certificate, the designated requirement becomes
+   `identifier "com.clippo.app" and certificate leaf = H"<certificate hash>"`, which is identical
+   for every release, so the Accessibility grant survives updates. The certificate is a free
+   self-signed one created once with `openssl` (RSA key, `codeSigning` extended key usage, exported
+   as a .p12); CI imports it from two
+   repository secrets into a throwaway keychain. Without the secrets (forks, local builds) the hook
+   falls back to ad-hoc signing and logs a warning. The build log prints the designated
+   requirement so it can be compared across releases.
+2. **Detect the problem in the app** (`src/main/paste/accessibilityNotice.ts`). Before sending
+   Cmd+V, `PasteService` checks `isTrustedAccessibilityClient(false)`. If it is false, Clippo
+   still returns focus to the previous app (so a manual Cmd+V works), asks macOS to show its
+   permission prompt once per session, and posts a notification explaining the "remove and add it
+   again" step, which the system prompt does not mention. Clicking it opens the right settings
+   pane. This replaces a silent failure with an actionable message.
+3. **Post the keystroke as a CGEvent** (`src/main/platform/macos.ts`). A tiny JavaScript for
+   Automation script calls `CGEventCreateKeyboardEvent` / `CGEventPost` for Cmd+V (virtual key 9),
+   which needs only Accessibility, no Automation permission. The System Events script is kept as a
+   fallback, and `NSAppleEventsUsageDescription` is now declared so that fallback (and the
+   ignored-apps check) can prompt instead of failing silently.
+4. **Wait for focus to settle.** macOS reports `did-resign-active` as soon as Clippo deactivates,
+   but the previous app makes its window key on its own run loop. A 50 ms pause before posting
+   the keystroke avoids racing it. It is injected into `PasteService`, so tests do not wait on it.
+
+### Trade-offs
+
+* A self-signed certificate keeps permissions stable but does **not** satisfy Gatekeeper: users
+  still right-click, Open on first launch. The complete fix is an **Apple Developer ID**
+  certificate (99 USD per year) plus notarization, which removes the Gatekeeper warning too. The
+  signing hook already takes any identity name, so switching is a secrets change.
+* Moving from ad-hoc to the certificate changes the designated requirement **once**, so users
+  re-grant Accessibility one last time on the first signed release.
+* The private key lives only in repository secrets and in the file the maintainer keeps. Losing it
+  means a new certificate, which costs users one more re-grant.
+
+### Interview angle
+
+"It works on my machine" had a precise explanation: in development the responsible process was
+Terminal, which already had the right permissions and usage strings, while the shipped app had an
+identity that changed on every build. Reading how TCC identifies apps (designated requirements)
+turned a vague "permissions are flaky" into a one-line signing fix plus in-app detection.
 
 ---
 

@@ -57,8 +57,10 @@
         }
       ],
       "extendInfo": {
-        "LSUIElement": true
-      }
+        "LSUIElement": true,
+        "NSAppleEventsUsageDescription": "Clippo uses System Events to detect the active app for ignored apps and as a fallback to paste."
+      },
+      "identity": null
     },
     "dmg": {
       "title": "Install Clippo",
@@ -82,6 +84,7 @@
     ],
     "directories": {
       "output": "release"
-    }
+    },
+    "afterPack": "scripts/mac/sign.js"
   }
 }

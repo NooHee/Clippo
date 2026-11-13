@@ -12,12 +12,14 @@ import { PopupWindow } from './windows/popupWindow';
 import { TooltipWindow } from './windows/tooltipWindow';
 import { ElectronAppActivation } from './paste/appActivation';
 import { PasteService } from './paste/pasteService';
+import { AccessibilityGuard } from './paste/accessibilityNotice';
 import { frontmostAppName, sendPasteKeystroke } from './platform/macos';
 import { perfMark, perfSinceStart } from './platform/perf';
 import { registerIpcHandlers } from './ipc';
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
+const FOCUS_SETTLE_MS = 50;
 
 /** Works both unpackaged (project root) and packaged (inside app.asar). */
 function assetPath(fileName: string): string {
@@ -96,11 +98,18 @@ function bootstrap(): void {
     onNewEntry: (entry) => popup.browserWindow.webContents.send(IPC.CLIPBOARD_UPDATED, entry),
   });
 
+  const accessibility = new AccessibilityGuard();
   const paste = new PasteService({
     hidePopup: () => popup.hide(),
     activation,
     sendPasteKeystroke: () => sendPasteKeystroke(),
     isAutoPasteSupported: isMac,
+    hasAccessibilityPermission: () => accessibility.isTrusted(),
+    onAccessibilityMissing: () => accessibility.explain(),
+    // The previous app becomes active right after Clippo resigns, but making its window key and
+    // restoring the caret happens on its own run loop; a short pause avoids racing it.
+    waitForFocusToSettle: () => new Promise((resolve) => setTimeout(resolve, FOCUS_SETTLE_MS)),
+    logger: console,
   });
 
   registerIpcHandlers({
