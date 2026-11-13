@@ -16,10 +16,10 @@ macOS builds attached.
   in the browser. *What's new* opens the release notes. The **×** skips that version for good.
 - Settings has an *Updates* section: an automatic check toggle, the running version and a
   *Check now* button. The menu bar menu has *Check for Updates…*.
-- Clippo is not code signed, and macOS only lets an app replace itself when it is. So the app
-  **notifies and links to the download** instead of installing silently. The section
-  [Why not electron-updater](#why-not-electron-updater-yet) explains the trade-off and the upgrade
-  path.
+- Clippo is signed with a free self-signed certificate, not an Apple Developer ID, and is not
+  notarized. The app therefore **notifies and links to the download** instead of replacing itself.
+  The section [Why not electron-updater](#why-not-electron-updater-yet) explains the trade-off and
+  the upgrade path.
 
 | Popup banner | Settings > Updates |
 | ------------ | ------------------ |
@@ -138,27 +138,36 @@ are deterministic, instant and need no `vi.useFakeTimers()`. `GitHubReleaseSourc
 `electron-updater` with the GitHub provider is the standard way to ship one-click updates in
 Electron: electron-builder publishes a `latest-mac.yml` with each release, the app downloads the new
 `.zip` in the background and installs it on quit. On macOS the install step is done by Squirrel.Mac,
-which **verifies that the new app is code signed with the same Developer ID as the running one**.
-Clippo's builds are not signed (`CSC_IDENTITY_AUTO_DISCOVERY: false` in CI), so that check fails and
-the install never happens.
+which **only installs an update whose code signature satisfies the running app's designated
+requirement**. Electron documents code signing as a requirement for macOS auto-updates, and the
+supported, tested setup is a Developer ID certificate with notarization.
+
+Since the "keep auto-paste working across updates" change, every build is signed with the same
+self-signed certificate (`scripts/mac/sign.js`, see
+[performance-and-auto-paste.md](performance-and-auto-paste.md)). That gives a stable designated
+requirement, which keeps the Accessibility permission across updates and could in principle also
+satisfy Squirrel.Mac. It is not a configuration Apple or electron-updater document, though, so it
+would need testing on real Macs before users depend on it.
 
 | Option | What the user gets | Cost and risk |
 | ------ | ------------------ | ------------- |
-| **Notify and link to the download** (chosen) | A clear "new version available" prompt and the right file one click away. They drag the new app into Applications. | Free, no new dependency, works for unsigned builds. One manual step for the user. |
+| **Notify and link to the download** (chosen) | A clear "new version available" prompt and the right file one click away. They drag the new app into Applications. | Free, no new dependency, works with any signing setup. One manual step for the user. |
 | electron-updater + Developer ID signing and notarization | Silent background download, installs on quit, no Gatekeeper prompt on first launch. | Apple Developer Program (99 USD per year), certificate and notarization secrets in CI, electron-updater and its dependency tree shipped inside the app. |
-| Custom self-updater for unsigned apps (download, unzip, replace the bundle, relaunch) | One click, no Apple account. | Reimplements what Squirrel does without the signature check, so integrity rests on HTTPS alone. Fragile (permissions in `/Applications`, app translocation). And because unsigned or ad hoc signed builds get a new code identity every release, macOS would **forget the Accessibility permission** that auto-paste needs after every update. |
+| electron-updater with the current self-signed certificate | Same one-click install, no Apple account. | Undocumented setup: needs testing on real Macs across two releases. Losing the private key breaks updates for everyone on the old certificate. Gatekeeper still warns on the first install. |
+| Custom self-updater (download, unzip, replace the bundle, relaunch) | One click, no Apple account. | Reimplements what Squirrel does, so its safety depends on getting the signature check right. Fragile (permissions in `/Applications`, app translocation). |
 
-That last point matters for Clippo specifically: auto-paste needs Accessibility access, and macOS
-ties that grant to the app's code signature. Only a stable Developer ID signature keeps the
-permission across updates. So proper signing is the real prerequisite for seamless updates, not the
-updater library.
+Auto-paste matters here: it needs Accessibility access, and macOS ties that grant to the app's code
+signature. A stable signature (the self-signed certificate today, a Developer ID later) is what
+keeps the permission across updates, so signing is the real prerequisite for seamless updates, not
+the updater library.
 
-### Upgrade path once the app is signed
+### Upgrade path to one-click install
 
 The current design was split so this is a small, local change:
 
-1. Add the Developer ID certificate and notarization credentials as CI secrets and remove
-   `CSC_IDENTITY_AUTO_DISCOVERY: false` from the `build` job.
+1. With a Developer ID: replace the self-signed certificate secrets with the Developer ID ones (the
+   signing hook takes any identity) and add notarization to the `build` job. With the self-signed
+   certificate: test the install between two signed releases on Apple Silicon and Intel first.
 2. Add `"publish": { "provider": "github" }` to the electron-builder config and upload
    `release/latest-mac.yml` and the `.blockmap` files in the `publish` job, next to the `.dmg` and
    `.zip`.

@@ -140,10 +140,10 @@ These are GitHub settings, not files, so they are listed here.
   explicit error, and only the PR title matters, not every commit on the branch.
 - Releases are not fully hands-off: someone has to merge the release PR. That is intended for a
   desktop app, where each release reaches users' machines.
-- The builds are not code signed or notarized (`CSC_IDENTITY_AUTO_DISCOVERY: false`), so users still
-  need right-click > Open on first launch. Signing would slot into the `build` job with an Apple
-  Developer certificate stored as secrets.
+- The builds are signed with a stable self-signed certificate (so the Accessibility permission
+  survives updates) but are not notarized, so users still need right-click > Open on first launch.
+  An Apple Developer ID certificate would remove that step.
 - The app notifies users about new releases and links to the right download (see
-  [update-notifications.md](update-notifications.md)), but cannot install them by itself until the
-  builds are signed. That relies on what this pipeline guarantees: increasing SemVer tags and
+  [update-notifications.md](update-notifications.md)), but does not install them by itself (see that
+  document for why). That relies on what this pipeline guarantees: increasing SemVer tags and
   consistent asset names (`Clippo-X.Y.Z.dmg`, `Clippo-X.Y.Z-arm64-mac.zip`).
