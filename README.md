@@ -5,11 +5,11 @@ A minimal clipboard history manager for macOS — inspired by Ditto.
 ## Features
 
 - Stores up to 500 clipboard entries (text)
-- Persistent SQLite storage across restarts
+- Encrypted persistent storage across restarts (macOS Keychain)
 - Real-time updates as you copy
 - Search through history
 - Pin important entries
-- Auto-paste via AppleScript (`Cmd+Shift+V`)
+- Click an entry to paste it straight into the text field you were typing in
 - Lives in the menu bar, out of your way
 
 ## Setup
@@ -51,26 +51,40 @@ npm run pack
 
 Output goes to `release/`.
 
+## Testing
+
+```bash
+npm run typecheck          # main, renderer and tests
+npm test                   # unit tests (Vitest)
+npm run test:e2e           # end-to-end smoke test of the built app (Linux: xvfb-run -a npm run test:e2e)
+npm run bench:startup      # cold-start benchmark, prints medians
+```
+
+Set `CLIPPO_PERF=1` to log hot-path timings (startup, hotkey to visible popup, paste).
+
 ## Architecture
+
+How opening was made faster and how auto-paste works (root causes, design decisions, measurements,
+trade-offs) is documented in [docs/performance-and-auto-paste.md](docs/performance-and-auto-paste.md).
 
 ```
 src/
-  shared/types.ts          # IPC channel names + ClipboardEntry type
+  shared/types.ts            # IPC channel names, entry and settings types
   main/
-    index.ts               # Electron bootstrap, tray, global shortcut
-    clipboard.ts           # Polls clipboard every 500ms
-    db.ts                  # SQLite via better-sqlite3 (WAL mode)
-    ipc.ts                 # IPC handlers, AppleScript paste trigger
-    preload.ts             # contextBridge — safe renderer ↔ main bridge
+    index.ts                 # Composition root: wires everything, app lifecycle, tray, hotkey
+    ipc.ts                   # IPC handlers (validated input, popup-only sender)
+    preload.ts               # Sandboxed contextBridge API
+    storage/                 # Debounced, atomic, Keychain-encrypted JSON stores + repositories
+    clipboard/               # Clipboard watcher, cheap image fingerprint, image + thumbnail store
+    paste/                   # Focus handback to the previous app and the paste sequence
+    windows/                 # Long-lived popup window, lazy tooltip window
+    platform/                # macOS command wrappers (execFile), perf logging
   renderer/
-    App.tsx                # Root component
+    App.tsx                  # Root component, popup reset handshake
     hooks/
-      useClipboardHistory  # All state management, debounced search
-    components/
-      SearchBar.tsx
-      ClipboardList.tsx
-      ClipboardItem.tsx    # Hover actions: pin / delete
-    styles.css             # Dark macOS aesthetic, backdrop blur
+      useClipboardHistory    # History state, debounced search
+    components/              # SearchBar, ClipboardList, ClipboardItem, GroupsView, SettingsPanel...
+    styles.css
 ```
 
 ## License
