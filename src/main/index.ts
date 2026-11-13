@@ -1,235 +1,194 @@
-import { app, BrowserWindow, Tray, Menu, globalShortcut, nativeImage, screen } from 'electron';
-import { execSync } from 'child_process';
-import path from 'path';
-import { ClipboardService } from './clipboard';
+import path from 'node:path';
+import { app, clipboard, globalShortcut, Menu, nativeImage, Tray } from 'electron';
+import { DEFAULT_SETTINGS, IPC, type Settings } from '../shared/types';
+import { createStorageCodec } from './encrypting';
+import { PersistentJsonStore } from './storage/persistentJsonStore';
+import { createEmptyHistory, HistoryRepository, parseHistoryData } from './storage/historyRepository';
+import { parseSettings, SettingsRepository } from './storage/settingsRepository';
+import { createEmptyGroups, GroupRepository, parseGroupData } from './storage/groupRepository';
+import { ClipboardWatcher } from './clipboard/clipboardWatcher';
+import { ImageStore } from './clipboard/imageStore';
+import { PopupWindow } from './windows/popupWindow';
+import { TooltipWindow } from './windows/tooltipWindow';
+import { ElectronAppActivation } from './paste/appActivation';
+import { PasteService } from './paste/pasteService';
+import { frontmostAppName, sendPasteKeystroke } from './platform/macos';
+import { perfMark, perfSinceStart } from './platform/perf';
 import { registerIpcHandlers } from './ipc';
-import { loadSettings } from './settings';
-import { IPC } from '../shared/types';
-import type { ClipboardEntry } from '../shared/types';
 
 const isDev = process.env.NODE_ENV === 'development';
+const isMac = process.platform === 'darwin';
 
-let tray: Tray | null = null;
-let window: BrowserWindow | null = null;
-let tooltipWindow: BrowserWindow | null = null;
-let clipboardService: ClipboardService | null = null;
-let previousAppName: string | null = null;
+/** Works both unpackaged (project root) and packaged (inside app.asar). */
+function assetPath(fileName: string): string {
+  return path.join(app.getAppPath(), 'assets', fileName);
+}
 
 /**
- * Gracefully hide the window:
- * 1. Set opacity to 0 (transparent but still composited — Chromium still paints)
- * 2. Tell renderer to reset state (it re-renders while transparent)
- * 3. After a short delay (enough for React to commit), actually hide + restore opacity
+ * Composition root: the only place that knows about every concrete implementation.
+ * Everything else receives its collaborators through constructors, which keeps modules
+ * small and lets the domain logic be unit tested without Electron.
  */
+function bootstrap(): void {
+  perfSinceStart('app.ready');
+  if (isMac) app.dock?.hide(); // Packaged builds are LSUIElement already; this covers `npm start`.
 
-export function hideWindowGracefully(win: BrowserWindow, onHidden?: () => void): void {
-  //TODO To fix later, the problem is the view is refreshing after opening the popup and not before
-  if (!win.isVisible()) return;
+  const activation = new ElectronAppActivation(app);
+  const userData = app.getPath('userData');
+  const codec = createStorageCodec();
 
-  // Hide tooltip immediately and ensure it stays hidden
-  if (tooltipWindow) {
-    tooltipWindow.hide();
-    tooltipWindow.setOpacity(0);
-  }
+  const settingsStore = new PersistentJsonStore<Settings>({
+    filePath: path.join(userData, 'clippo-settings.json'),
+    createDefault: () => ({ ...DEFAULT_SETTINGS }),
+    parse: parseSettings,
+    codec,
+  });
+  const settings = new SettingsRepository(settingsStore);
 
-  win.setOpacity(0);
-  win.webContents.send('window-will-hide');
-  setTimeout(() => {
-    win.hide();
-    win.setOpacity(1);
-    onHidden?.();
-  }, 80);
-}
+  let tray: Tray | null = null;
+  const tooltip = new TooltipWindow(assetPath('tooltip.html'));
 
-function createTooltipWindow(): BrowserWindow {
-  const win = new BrowserWindow({
-    width: 340,
-    height: 120,
-    show: false,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    focusable: false,
-    resizable: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
+  // 1. Start loading the renderer first: Chromium boots it in another process while the
+  //    main process continues with the work below.
+  const popup = new PopupWindow({
+    preloadPath: path.join(__dirname, 'preload.js'),
+    devServerUrl: isDev ? 'http://localhost:5173' : undefined,
+    indexHtmlPath: path.join(app.getAppPath(), 'dist/renderer/index.html'),
+    popupPosition: () => settings.get().popupPosition,
+    dismissOnBlur: () => settings.get().dismissOnBlur,
+    trayBounds: () => tray?.getBounds() ?? null,
+    onHide: () => tooltip.hide(),
+  });
+
+  // 2. Load stored data now (disk read + Keychain decryption) instead of on the first open.
+  const images = new ImageStore(path.join(userData, 'images'));
+  const historyStore = new PersistentJsonStore({
+    filePath: path.join(userData, 'clippo-history.json'),
+    createDefault: createEmptyHistory,
+    parse: parseHistoryData,
+    codec,
+  });
+  const history = new HistoryRepository(historyStore, {
+    maxHistory: () => settings.get().maxHistory,
+    onEntryRemoved: (entry) => {
+      if (entry.type === 'image' && entry.imageName) images.delete(entry.imageName);
     },
   });
-  win.setIgnoreMouseEvents(true);
-  const htmlPath = isDev
-    ? path.join(__dirname, '../../../assets/tooltip.html')
-    : path.join(app.getAppPath(), 'assets', 'tooltip.html');
-  win.loadFile(htmlPath);
-  return win;
-}
+  history.warmUp();
 
-function createWindow(): BrowserWindow {
-  const win = new BrowserWindow({
-    width: 420,
-    height: 600,
-    minWidth: 300,
-    minHeight: 400,
-    show: false,
-    frame: false,
-    resizable: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
+  const groupStore = new PersistentJsonStore({
+    filePath: path.join(userData, 'clippo-groups.json'),
+    createDefault: createEmptyGroups,
+    parse: parseGroupData,
+    codec,
+  });
+  const groups = new GroupRepository(groupStore);
+
+  const watcher = new ClipboardWatcher({
+    clipboard,
+    history,
+    saveImage: (fingerprint) => {
+      const image = clipboard.readImage();
+      return image.isEmpty() ? null : images.save(image, fingerprint);
+    },
+    ignoredApps: () => settings.get().ignoredApps,
+    frontmostAppName,
+    onNewEntry: (entry) => popup.browserWindow.webContents.send(IPC.CLIPBOARD_UPDATED, entry),
+  });
+
+  const paste = new PasteService({
+    hidePopup: () => popup.hide(),
+    activation,
+    sendPasteKeystroke: () => sendPasteKeystroke(),
+    isAutoPasteSupported: isMac,
+  });
+
+  registerIpcHandlers({
+    popup,
+    tooltip,
+    history,
+    settings,
+    groups,
+    images,
+    paste,
+    writeText: (text) => {
+      clipboard.writeText(text);
+      watcher.rememberCurrentContent();
+    },
+    writeImage: (imageName) => {
+      const image = images.read(imageName);
+      if (!image) return false;
+      clipboard.writeImage(image);
+      watcher.rememberCurrentContent();
+      return true;
+    },
+    onSettingsSaved: (saved) => {
+      app.setLoginItemSettings({ openAtLogin: saved.launchAtLogin });
+      watcher.updateInterval(saved.pollIntervalMs);
+      registerHotkey(saved.hotkey, () => popup.toggle());
     },
   });
 
-  if (isDev) {
-    win.loadURL('http://localhost:5173');
-    win.webContents.openDevTools({ mode: 'detach' });
-  } else {
-    win.loadFile(path.join(app.getAppPath(), 'dist/renderer/index.html'));
-  }
+  tray = createTray(() => popup.toggle());
+  registerHotkey(settings.get().hotkey, () => popup.toggle());
+  app.setLoginItemSettings({ openAtLogin: settings.get().launchAtLogin });
+  watcher.start(settings.get().pollIntervalMs);
 
-  win.on('blur', () => {
-    tooltipWindow?.hide();
-    if (!loadSettings().dismissOnBlur) return;
-    setTimeout(() => {
-      if (!win.isFocused()) hideWindowGracefully(win);
-    }, 100);
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
+    watcher.stop();
+    // Debounced writes may still be pending; the event loop will not run again after this.
+    [settingsStore, historyStore, groupStore].forEach((store) => {
+      try {
+        store.flushSync();
+      } catch (error) {
+        console.error('[Clippo] Failed to save on quit', error);
+      }
+    });
   });
 
-  win.on('hide', () => {
-    tooltipWindow?.hide();
-  });
-
-  return win;
+  app.on('second-instance', () => void popup.show());
+  popup.browserWindow.once('ready-to-show', () => perfSinceStart('popup.ready-to-show'));
 }
 
-function createTray(win: BrowserWindow): Tray {
-  const iconPath = isDev
-    ? path.join(__dirname, '../../../assets/trayTemplate.png')
-    : path.join(process.resourcesPath, 'app.asar', 'assets', 'trayTemplate.png');
-  const icon = nativeImage.createFromPath(iconPath);
+function createTray(onToggle: () => void): Tray {
+  const icon = nativeImage.createFromPath(assetPath('trayTemplate.png'));
   icon.setTemplateImage(true);
-  const t = new Tray(icon);
-
-  const contextMenu = Menu.buildFromTemplate([
-    { label: 'Open Clippo', click: () => toggleWindow(win) },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() },
-  ]);
-
-  t.setToolTip('Clippo');
-  t.setContextMenu(contextMenu);
-  t.on('click', () => toggleWindow(win));
-
-  return t;
+  const tray = new Tray(icon);
+  tray.setToolTip('Clippo');
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open Clippo', click: onToggle },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ]),
+  );
+  tray.on('click', onToggle);
+  return tray;
 }
 
-function toggleWindow(win: BrowserWindow): void {
-  if (win.isVisible()) {
-    hideWindowGracefully(win);
-    return;
-  }
-
-  positionWindow(win);
-  win.show();
-  win.focus();
-}
-
-function positionWindow(win: BrowserWindow): void {
-  const { popupPosition } = loadSettings();
-
-  if (popupPosition === 'mouse') {
-    const cursor = screen.getCursorScreenPoint();
-    const display = screen.getDisplayNearestPoint(cursor);
-    const { width, height } = win.getBounds();
-    const { x: dx, y: dy, width: dw, height: dh } = display.workArea;
-
-    const x = Math.round(Math.max(dx, Math.min(cursor.x - width / 2, dx + dw - width)));
-    const y = Math.round(Math.max(dy, Math.min(cursor.y + 12, dy + dh - height)));
-    win.setPosition(x, y, false);
-    return;
-  }
-
-  // Default: near tray icon
-  if (!tray) return;
-  const trayBounds = tray.getBounds();
-  const windowBounds = win.getBounds();
-  const x = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
-  const y = Math.round(trayBounds.y + trayBounds.height + 4);
-  win.setPosition(x, y, false);
-}
-
-function registerShortcuts(win: BrowserWindow, hotkey: string): void {
+/**
+ * The hotkey handler only toggles the window. It used to run a synchronous `osascript` first to
+ * capture the frontmost app name, blocking the main thread before the popup could appear.
+ * Focus restoration no longer needs that name (see PasteService).
+ */
+function registerHotkey(hotkey: string, onToggle: () => void): void {
   globalShortcut.unregisterAll();
-  globalShortcut.register(hotkey, () => {
-    // Capture previous app name BEFORE toggling
-    try {
-      previousAppName = execSync(
-        `osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true'`,
-        { timeout: 1000, encoding: 'utf-8' }
-      ).trim();
-      console.log('[Clippo] Captured previous app:', previousAppName);
-    } catch (e) {
-      console.warn('[Clippo] Failed to capture app, will paste without focus restoration');
-      previousAppName = null;
-    }
-    toggleWindow(win);
+  const registered = globalShortcut.register(hotkey, () => {
+    const done = perfMark('hotkey.toggle');
+    onToggle();
+    done();
   });
+  if (!registered) console.warn(`[Clippo] Could not register the global shortcut "${hotkey}".`);
 }
 
-export function restoreFocusAndPaste(): void {
-  if (previousAppName && previousAppName !== 'Clippo') {
-    try {
-      // Activate app and paste in one AppleScript command
-      const script = `
-        activate application "${previousAppName}"
-        tell application "System Events" to keystroke "v" using command down
-      `;
-      execSync(`osascript -e '${script}'`, { timeout: 500 });
-    } catch (e) {
-      console.error('[Clippo] Failed to restore focus and paste:', e);
-    }
-  }
-}
-
-app.whenReady().then(() => {
-  const dockIconPath = isDev
-    ? path.join(__dirname, '../../../assets/icon.png')
-    : path.join(process.resourcesPath, 'app.asar', 'assets', 'icon.png');
-  app.dock.setIcon(dockIconPath);
-  app.dock.hide();
-
-  const settings = loadSettings();
-
-  window = createWindow();
-  tooltipWindow = createTooltipWindow();
-  tray = createTray(window);
-
-  clipboardService = new ClipboardService((entry: ClipboardEntry) => {
-    window?.webContents.send(IPC.CLIPBOARD_UPDATED, entry);
-  }, settings.pollIntervalMs);
-
-  registerIpcHandlers(window, tooltipWindow, clipboardService, (newSettings) => {
-    registerShortcuts(window!, newSettings.hotkey);
+// A second launch (for example from Finder) focuses the running instance instead of starting a
+// new one with its own tray icon and clipboard watcher.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('window-all-closed', () => {
+    // Menu bar app: keep running without windows.
   });
-
-  registerShortcuts(window, settings.hotkey);
-  app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin });
-
-  clipboardService.start();
-});
-
-app.on('will-quit', () => {
-  globalShortcut.unregisterAll();
-  clipboardService?.stop();
-});
-
-app.on('window-all-closed', () => {
-  // Keep running in tray
-});
+  void app.whenReady().then(bootstrap);
+}

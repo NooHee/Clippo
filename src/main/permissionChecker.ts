@@ -1,63 +1,20 @@
-import { execSync } from 'child_process';
+import { safeStorage, systemPreferences } from 'electron';
 import type { PermissionStatus } from '../shared/types';
+import { frontmostAppName } from './platform/macos';
 
 /**
- * Check if the app has the required permissions on macOS
+ * Reports the macOS permissions Clippo relies on.
+ *
+ * Accessibility and Keychain use native Electron APIs (instant, no child process). Only the
+ * System Events automation check needs AppleScript, and it runs asynchronously.
  */
-export function checkPermissions(): PermissionStatus {
+export async function checkPermissions(): Promise<PermissionStatus> {
+  if (process.platform !== 'darwin') {
+    return { keychain: safeStorage.isEncryptionAvailable(), systemEvents: false, accessibility: false };
+  }
   return {
-    keychain: safeCheck(checkKeychainAccess),
-    systemEvents: safeCheck(checkSystemEventsAccess),
-    accessibility: safeCheck(checkAccessibilityAccess),
+    keychain: safeStorage.isEncryptionAvailable(),
+    accessibility: systemPreferences.isTrustedAccessibilityClient(false),
+    systemEvents: (await frontmostAppName()) !== null,
   };
-}
-
-/**
- * Wrap permission checks in timeout to prevent hanging
- */
-function safeCheck(check: () => boolean): boolean {
-  try {
-    return check();
-  } catch (e) {
-    console.error('[Clippo] Permission check failed:', e);
-    return false;
-  }
-}
-
-/**
- * Check if we have keychain access by attempting a simple operation
- */
-function checkKeychainAccess(): boolean {
-  try {
-    // Simple test: try to read keychain
-    execSync('security show-keychain-info login.keychain 2>/dev/null', { timeout: 500, stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if we have System Events access via AppleScript
- */
-function checkSystemEventsAccess(): boolean {
-  try {
-    execSync(`osascript -e 'tell application "System Events" to name'`, { timeout: 500 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Check if we have Accessibility access
- */
-function checkAccessibilityAccess(): boolean {
-  try {
-    // Try a simple keystroke
-    execSync(`osascript -e 'tell application "System Events" to keystroke ""'`, { timeout: 500 });
-    return true;
-  } catch {
-    return false;
-  }
 }

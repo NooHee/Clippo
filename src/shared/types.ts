@@ -88,9 +88,11 @@ export interface IpcChannels {
   CHECK_PERMISSIONS: 'check-permissions';
   COMPLETE_ONBOARDING: 'complete-onboarding';
   OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings';
+  POPUP_RESET_DONE: 'popup-reset-done';
 
   // Main → Renderer
   CLIPBOARD_UPDATED: 'clipboard-updated';
+  POPUP_WILL_HIDE: 'popup-will-hide';
 }
 
 export const IPC: IpcChannels = {
@@ -122,5 +124,16 @@ export const IPC: IpcChannels = {
   CHECK_PERMISSIONS: 'check-permissions',
   COMPLETE_ONBOARDING: 'complete-onboarding',
   OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings',
+  POPUP_RESET_DONE: 'popup-reset-done',
   CLIPBOARD_UPDATED: 'clipboard-updated',
+  POPUP_WILL_HIDE: 'popup-will-hide',
 };
+
+/**
+ * Outcome of a paste request, returned to the renderer.
+ * - `pasted`: the entry was written to the clipboard and Cmd+V was sent to the previous app.
+ * - `copied`: the entry is on the clipboard but the keystroke could not be sent
+ *   (usually missing Accessibility permission), so the user pastes manually.
+ * - `failed`: the entry could not be written to the clipboard.
+ */
+export type PasteResult = 'pasted' | 'copied' | 'failed';
