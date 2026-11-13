@@ -37,7 +37,10 @@ Auto-paste (Clippo sends `Cmd+V` after you pick an entry) needs Accessibility ac
 
 **System Settings > Privacy & Security > Accessibility > enable Clippo**
 
-Without it the entry is still copied and Clippo shows a notification; paste manually with `Cmd+V`.
+Without it the entry is still copied; paste manually with `Cmd+V`. Clippo watches the permission
+and, while it is missing, shows a banner in the popup, a status in Settings and a ⚠︎ in the menu
+bar, all of which clear by themselves once access is granted
+([details](docs/accessibility-permission-safeguard.md)).
 If Clippo is already enabled but paste stopped working after an update, remove it with the minus
 button and add it again. Release builds are signed with a stable certificate so this should only be
 needed once; see [docs/performance-and-auto-paste.md](docs/performance-and-auto-paste.md#part-3-auto-paste-still-failed-on-a-real-mac).

@@ -17,6 +17,8 @@ export interface PopupWindowOptions {
   dismissOnBlur: () => boolean;
   trayBounds: () => Rectangle | null;
   onHide?: () => void;
+  /** Runs right after the popup is shown, off the critical path of the first frame. */
+  onShow?: () => void;
 }
 
 /**
@@ -84,6 +86,7 @@ export class PopupWindow {
     this.window.show();
     this.window.focus();
     done();
+    this.options.onShow?.();
   }
 
   /**

@@ -35,6 +35,8 @@ const IPC = {
   OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings',
   POPUP_WILL_HIDE: 'popup-will-hide',
   POPUP_RESET_DONE: 'popup-reset-done',
+  GET_ACCESSIBILITY_STATE: 'get-accessibility-state',
+  ACCESSIBILITY_CHANGED: 'accessibility-changed',
 } as const;
 
 contextBridge.exposeInMainWorld('clipstack', {
@@ -121,6 +123,16 @@ contextBridge.exposeInMainWorld('clipstack', {
 
   openAccessibilitySettings: () =>
     ipcRenderer.invoke(IPC.OPEN_ACCESSIBILITY_SETTINGS),
+
+  getAccessibilityState: () =>
+    ipcRenderer.invoke(IPC.GET_ACCESSIBILITY_STATE),
+
+  /** Pushed by main whenever the Accessibility permission is granted or lost. */
+  onAccessibilityChanged: (callback: (state: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
+    ipcRenderer.on(IPC.ACCESSIBILITY_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC.ACCESSIBILITY_CHANGED, handler);
+  },
 
   /** Main asks the UI to reset before the popup hides, so the next open shows a fresh view. */
   onPopupWillHide: (callback: () => void) => {

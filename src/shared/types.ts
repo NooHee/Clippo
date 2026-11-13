@@ -30,6 +30,14 @@ export interface PermissionStatus {
   accessibility: boolean;
 }
 
+/**
+ * Whether Clippo may send keystrokes to other apps (macOS Accessibility).
+ * - `granted`: auto-paste works.
+ * - `missing`: not granted, or granted to an older build (stale toggle). Entries are only copied.
+ * - `unsupported`: not macOS; auto-paste does not exist there, so nothing is degraded.
+ */
+export type AccessibilityState = 'granted' | 'missing' | 'unsupported';
+
 export const DEFAULT_SETTINGS: Settings = {
   hotkey: 'Command+Shift+V',
   maxHistory: 500,
@@ -89,10 +97,12 @@ export interface IpcChannels {
   COMPLETE_ONBOARDING: 'complete-onboarding';
   OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings';
   POPUP_RESET_DONE: 'popup-reset-done';
+  GET_ACCESSIBILITY_STATE: 'get-accessibility-state';
 
   // Main → Renderer
   CLIPBOARD_UPDATED: 'clipboard-updated';
   POPUP_WILL_HIDE: 'popup-will-hide';
+  ACCESSIBILITY_CHANGED: 'accessibility-changed';
 }
 
 export const IPC: IpcChannels = {
@@ -127,6 +137,8 @@ export const IPC: IpcChannels = {
   POPUP_RESET_DONE: 'popup-reset-done',
   CLIPBOARD_UPDATED: 'clipboard-updated',
   POPUP_WILL_HIDE: 'popup-will-hide',
+  GET_ACCESSIBILITY_STATE: 'get-accessibility-state',
+  ACCESSIBILITY_CHANGED: 'accessibility-changed',
 };
 
 /**

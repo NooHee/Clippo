@@ -45,6 +45,18 @@ const fr = {
     newGroup: 'Nouveau groupe',
     newGroupPlaceholder: 'Nom du groupe…',
   },
+  accessibility: {
+    title: 'Collage automatique désactivé',
+    impact: "Clippo a besoin de l'accès Accessibilité pour coller dans l'app que vous utilisiez. En attendant, un clic copie seulement l'élément : collez avec ⌘V.",
+    openSettings: 'Ouvrir les réglages Accessibilité',
+    showSteps: 'Comment corriger',
+    hideSteps: 'Masquer les étapes',
+    steps: {
+      open: 'Activez Clippo dans Confidentialité et sécurité > Accessibilité.',
+      stale: "Déjà activé ? Après une mise à jour, macOS garde l'ancienne autorisation. Sélectionnez Clippo, retirez-le avec le bouton moins, puis ajoutez-le à nouveau avec plus.",
+      autoClear: "Ce message disparaît tout seul dès que l'accès fonctionne.",
+    },
+  },
   settings: {
     sections: {
       general: 'Général',
@@ -53,6 +65,12 @@ const fr = {
       privacy: 'Confidentialité',
       backup: 'Sauvegarde',
       danger: 'Zone dangereuse',
+      permissions: 'Autorisations',
+    },
+    accessibility: {
+      label: 'Accessibilité (collage auto)',
+      granted: 'Accordée',
+      fix: 'Désactivée · Corriger…',
     },
     theme: {
       label: 'Thème',

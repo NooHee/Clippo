@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import type { Settings } from '../../shared/types';
+import type { AccessibilityState, Settings } from '../../shared/types';
 import { DEFAULT_SETTINGS } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
 import { changeLanguage } from '../../i18n';
 
 interface Props {
+  accessibility: AccessibilityState | null;
   onClose: () => void;
   onClearHistory: () => void;
 }
@@ -38,7 +39,7 @@ function captureHotkey(e: KeyboardEvent): string | null {
   return [...modifiers, key].join('+');
 }
 
-export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory }) => {
+export const SettingsPanel: React.FC<Props> = ({ accessibility, onClose, onClearHistory }) => {
   const { translate } = useLocalization();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [recording, setRecording] = useState(false);
@@ -213,6 +214,22 @@ export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory }) => {
           </div>
         </div>
       </div>
+
+      {accessibility !== null && accessibility !== 'unsupported' && (
+        <div className="settings-section">
+          <div className="settings-section-label">{translate('settings.sections.permissions')}</div>
+          <div className="settings-row">
+            <span className="settings-row-label">{translate('settings.accessibility.label')}</span>
+            {accessibility === 'granted' ? (
+              <span className="settings-permission-status granted">{translate('settings.accessibility.granted')}</span>
+            ) : (
+              <button className="settings-permission-fix" onClick={() => window.clipstack.openAccessibilitySettings()}>
+                {translate('settings.accessibility.fix')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="settings-section">
         <div className="settings-section-label">{translate('settings.sections.hotkey')}</div>

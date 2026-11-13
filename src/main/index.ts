@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { app, clipboard, globalShortcut, Menu, nativeImage, Tray } from 'electron';
-import { DEFAULT_SETTINGS, IPC, type Settings } from '../shared/types';
+import { app, clipboard, globalShortcut, Menu, nativeImage, systemPreferences, Tray } from 'electron';
+import { DEFAULT_SETTINGS, IPC, type AccessibilityState, type Settings } from '../shared/types';
 import { createStorageCodec } from './encrypting';
 import { PersistentJsonStore } from './storage/persistentJsonStore';
 import { createEmptyHistory, HistoryRepository, parseHistoryData } from './storage/historyRepository';
@@ -13,13 +13,17 @@ import { TooltipWindow } from './windows/tooltipWindow';
 import { ElectronAppActivation } from './paste/appActivation';
 import { PasteService } from './paste/pasteService';
 import { AccessibilityGuard } from './paste/accessibilityNotice';
-import { frontmostAppName, sendPasteKeystroke } from './platform/macos';
+import { AccessibilityMonitor, nodeScheduler, type Cancel } from './permissions/accessibilityMonitor';
+import { describeTray, type TrayActions } from './tray/trayMenu';
+import { frontmostAppName, openAccessibilitySettings, sendPasteKeystroke } from './platform/macos';
 import { perfMark, perfSinceStart } from './platform/perf';
 import { registerIpcHandlers } from './ipc';
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
 const FOCUS_SETTLE_MS = 50;
+/** Distributed notification macOS posts when an app is added, removed or toggled in Accessibility. */
+const ACCESSIBILITY_CHANGED_NOTIFICATION = 'com.apple.accessibility.api';
 
 /** Works both unpackaged (project root) and packaged (inside app.asar). */
 function assetPath(fileName: string): string {
@@ -48,6 +52,13 @@ function bootstrap(): void {
   const settings = new SettingsRepository(settingsStore);
 
   let tray: Tray | null = null;
+  const accessibilityGuard = new AccessibilityGuard();
+  const accessibility = new AccessibilityMonitor({
+    isSupported: isMac,
+    isTrusted: () => accessibilityGuard.isTrusted(),
+    scheduler: nodeScheduler,
+    subscribeToSystemChanges: subscribeToAccessibilityChanges,
+  });
   const tooltip = new TooltipWindow(assetPath('tooltip.html'));
 
   // 1. Start loading the renderer first: Chromium boots it in another process while the
@@ -60,6 +71,8 @@ function bootstrap(): void {
     dismissOnBlur: () => settings.get().dismissOnBlur,
     trayBounds: () => tray?.getBounds() ?? null,
     onHide: () => tooltip.hide(),
+    // Catches a permission removed while Clippo was in the background before the user acts on it.
+    onShow: () => accessibility.refresh(),
   });
 
   // 2. Load stored data now (disk read + Keychain decryption) instead of on the first open.
@@ -98,14 +111,13 @@ function bootstrap(): void {
     onNewEntry: (entry) => popup.browserWindow.webContents.send(IPC.CLIPBOARD_UPDATED, entry),
   });
 
-  const accessibility = new AccessibilityGuard();
   const paste = new PasteService({
     hidePopup: () => popup.hide(),
     activation,
     sendPasteKeystroke: () => sendPasteKeystroke(),
     isAutoPasteSupported: isMac,
-    hasAccessibilityPermission: () => accessibility.isTrusted(),
-    onAccessibilityMissing: () => accessibility.explain(),
+    hasAccessibilityPermission: () => accessibility.refresh() === 'granted',
+    onAccessibilityMissing: () => accessibilityGuard.explain(),
     // The previous app becomes active right after Clippo resigns, but making its window key and
     // restoring the caret happens on its own run loop; a short pause avoids racing it.
     waitForFocusToSettle: () => new Promise((resolve) => setTimeout(resolve, FOCUS_SETTLE_MS)),
@@ -120,6 +132,7 @@ function bootstrap(): void {
     groups,
     images,
     paste,
+    accessibility,
     writeText: (text) => {
       clipboard.writeText(text);
       watcher.rememberCurrentContent();
@@ -135,10 +148,26 @@ function bootstrap(): void {
       app.setLoginItemSettings({ openAtLogin: saved.launchAtLogin });
       watcher.updateInterval(saved.pollIntervalMs);
       registerHotkey(saved.hotkey, () => popup.toggle());
+      renderTray();
     },
   });
 
-  tray = createTray(() => popup.toggle());
+  const trayActions: TrayActions = {
+    toggle: () => popup.toggle(),
+    openAccessibilitySettings: () => void openAccessibilitySettings(),
+    quit: () => app.quit(),
+  };
+  tray = createTray(trayActions.toggle);
+  const renderTray = (): void => {
+    if (tray) applyTrayState(tray, accessibility.current, settings.get().language, trayActions);
+  };
+  accessibility.onChange((state) => {
+    renderTray();
+    popup.browserWindow.webContents.send(IPC.ACCESSIBILITY_CHANGED, state);
+  });
+  renderTray();
+  accessibility.start();
+
   registerHotkey(settings.get().hotkey, () => popup.toggle());
   app.setLoginItemSettings({ openAtLogin: settings.get().launchAtLogin });
   watcher.start(settings.get().pollIntervalMs);
@@ -146,6 +175,7 @@ function bootstrap(): void {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     watcher.stop();
+    accessibility.stop();
     // Debounced writes may still be pending; the event loop will not run again after this.
     [settingsStore, historyStore, groupStore].forEach((store) => {
       try {
@@ -164,16 +194,20 @@ function createTray(onToggle: () => void): Tray {
   const icon = nativeImage.createFromPath(assetPath('trayTemplate.png'));
   icon.setTemplateImage(true);
   const tray = new Tray(icon);
-  tray.setToolTip('Clippo');
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Open Clippo', click: onToggle },
-      { type: 'separator' },
-      { label: 'Quit', click: () => app.quit() },
-    ]),
-  );
   tray.on('click', onToggle);
   return tray;
+}
+
+function applyTrayState(tray: Tray, state: AccessibilityState, language: Settings['language'], actions: TrayActions): void {
+  const { tooltip, title, menu } = describeTray(state, language, actions);
+  tray.setToolTip(tooltip);
+  if (isMac) tray.setTitle(title);
+  tray.setContextMenu(Menu.buildFromTemplate(menu));
+}
+
+function subscribeToAccessibilityChanges(listener: () => void): Cancel {
+  const id = systemPreferences.subscribeNotification(ACCESSIBILITY_CHANGED_NOTIFICATION, listener);
+  return () => systemPreferences.unsubscribeNotification(id);
 }
 
 /**

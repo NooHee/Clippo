@@ -12,6 +12,7 @@ import type { ImageStore } from './clipboard/imageStore';
 import type { PopupWindow } from './windows/popupWindow';
 import type { TooltipWindow } from './windows/tooltipWindow';
 import type { PasteService } from './paste/pasteService';
+import type { AccessibilityMonitor } from './permissions/accessibilityMonitor';
 import { checkPermissions } from './permissionChecker';
 import { openAccessibilitySettings } from './platform/macos';
 import { perfMark } from './platform/perf';
@@ -24,6 +25,7 @@ export interface IpcDependencies {
   groups: GroupRepository;
   images: ImageStore;
   paste: PasteService;
+  accessibility: AccessibilityMonitor;
   /** Writes text to the clipboard without the watcher recording it as a new entry. */
   writeText: (text: string) => void;
   /** Same for images; returns false if the image file is gone. */
@@ -176,6 +178,7 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
   });
   on(IPC.CHECK_PERMISSIONS, () => checkPermissions());
   on(IPC.OPEN_ACCESSIBILITY_SETTINGS, () => openAccessibilitySettings());
+  on(IPC.GET_ACCESSIBILITY_STATE, () => deps.accessibility.refresh());
 }
 
 /** Opens a file picker and parses the chosen JSON file. Undefined when cancelled or unreadable. */
