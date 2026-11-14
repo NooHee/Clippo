@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import type { Settings, UpdateStatus } from '../../shared/types';
+import type { AccessibilityState, Settings, UpdateStatus } from '../../shared/types';
 import { DEFAULT_SETTINGS } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
 import { changeLanguage } from '../../i18n';
 
 interface Props {
+  accessibility: AccessibilityState | null;
   onClose: () => void;
   onClearHistory: () => void;
   updateStatus: UpdateStatus | null;
@@ -40,7 +41,7 @@ function captureHotkey(e: KeyboardEvent): string | null {
   return [...modifiers, key].join('+');
 }
 
-export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory, updateStatus, onCheckForUpdates }) => {
+export const SettingsPanel: React.FC<Props> = ({ accessibility, onClose, onClearHistory, updateStatus, onCheckForUpdates }) => {
   const { translate } = useLocalization();
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [recording, setRecording] = useState(false);
@@ -216,6 +217,22 @@ export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory, update
         </div>
       </div>
 
+      {accessibility !== null && accessibility !== 'unsupported' && (
+        <div className="settings-section">
+          <div className="settings-section-label">{translate('settings.sections.permissions')}</div>
+          <div className="settings-row">
+            <span className="settings-row-label">{translate('settings.accessibility.label')}</span>
+            {accessibility === 'granted' ? (
+              <span className="settings-permission-status granted">{translate('settings.accessibility.granted')}</span>
+            ) : (
+              <button className="settings-permission-fix" onClick={() => window.clipstack.openAccessibilitySettings()}>
+                {translate('settings.accessibility.fix')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="settings-section">
         <div className="settings-section-label">{translate('settings.sections.hotkey')}</div>
         <div className="settings-row">
@@ -326,7 +343,7 @@ export const SettingsPanel: React.FC<Props> = ({ onClose, onClearHistory, update
           <button
             className="settings-update-btn"
             onClick={() => void onCheckForUpdates()}
-            disabled={updateStatus?.state === 'checking'}
+            disabled={updateStatus?.state === 'checking' || updateStatus?.state === 'downloading' || updateStatus?.state === 'installing'}
           >
             {updateStatus?.state === 'checking' ? translate('settings.updates.checking') : translate('settings.updates.checkNow')}
           </button>
@@ -369,19 +386,41 @@ const UpdateStatusLine: React.FC<{ status: UpdateStatus | null }> = ({ status })
       return <p className="settings-update-status">{translate('settings.updates.upToDate')}</p>;
     case 'error':
       return <p className="settings-update-status error">{translate('settings.updates.error')}</p>;
-    case 'available':
+    case 'downloading':
       return (
         <p className="settings-update-status available">
-          {translate('settings.updates.available', { version: status.update.version })}{' '}
-          <button className="settings-update-link" onClick={() => void window.clipstack.openUpdateLink('download')}>
-            {translate('settings.updates.download')}
-          </button>
+          {translate('settings.updates.downloading', { version: status.update.version, percent: status.percent })}
+        </p>
+      );
+    case 'installing':
+      return (
+        <p className="settings-update-status available">
+          {translate('settings.updates.installing', { version: status.update.version })}
+        </p>
+      );
+    case 'available': {
+      const installInPlace = status.canInstall && !status.installFailed;
+      return (
+        <p className={`settings-update-status ${status.installFailed ? 'error' : 'available'}`}>
+          {status.installFailed
+            ? translate('settings.updates.installFailed')
+            : translate('settings.updates.available', { version: status.update.version })}{' '}
+          {installInPlace ? (
+            <button className="settings-update-link" onClick={() => void window.clipstack.installUpdate()}>
+              {translate('settings.updates.install')}
+            </button>
+          ) : (
+            <button className="settings-update-link" onClick={() => void window.clipstack.openUpdateLink('download')}>
+              {translate('settings.updates.download')}
+            </button>
+          )}
           {' · '}
           <button className="settings-update-link" onClick={() => void window.clipstack.openUpdateLink('release-notes')}>
             {translate('settings.updates.releaseNotes')}
           </button>
         </p>
       );
+    }
     default:
       return null;
   }

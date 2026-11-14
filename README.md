@@ -11,7 +11,7 @@ A minimal clipboard history manager for macOS — inspired by Ditto.
 - Pin important entries
 - Click an entry to paste it straight into the text field you were typing in
 - Lives in the menu bar, out of your way
-- Tells you when a new version is out and links to the right download for your Mac
+- Updates itself: one click downloads the new version, installs it and restarts Clippo
 
 ## Setup
 
@@ -38,7 +38,10 @@ Auto-paste (Clippo sends `Cmd+V` after you pick an entry) needs Accessibility ac
 
 **System Settings > Privacy & Security > Accessibility > enable Clippo**
 
-Without it the entry is still copied and Clippo shows a notification; paste manually with `Cmd+V`.
+Without it the entry is still copied; paste manually with `Cmd+V`. Clippo watches the permission
+and, while it is missing, shows a banner in the popup, a status in Settings and a ⚠︎ in the menu
+bar, all of which clear by themselves once access is granted
+([details](docs/accessibility-permission-safeguard.md)).
 If Clippo is already enabled but paste stopped working after an update, remove it with the minus
 button and add it again. Release builds are signed with a stable certificate so this should only be
 needed once; see [docs/performance-and-auto-paste.md](docs/performance-and-auto-paste.md#part-3-auto-paste-still-failed-on-a-real-mac).
@@ -65,8 +68,9 @@ release and attaches the macOS builds. Never edit the version by hand. Details a
 [docs/release-process.md](docs/release-process.md).
 
 The app checks GitHub Releases for a newer version (at most every 6 hours, can be turned off in
-Settings) and shows a banner, a notification and a menu item with a download link. How it works and
-why it does not self-install yet: [docs/update-notifications.md](docs/update-notifications.md).
+Settings) and shows a banner, a notification and a menu item. **Update** downloads the new version,
+installs it and restarts Clippo, with the download link as a fallback. How it works:
+[docs/update-notifications.md](docs/update-notifications.md).
 
 ## Testing
 

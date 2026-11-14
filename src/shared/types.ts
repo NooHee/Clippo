@@ -34,6 +34,14 @@ export interface PermissionStatus {
   accessibility: boolean;
 }
 
+/**
+ * Whether Clippo may send keystrokes to other apps (macOS Accessibility).
+ * - `granted`: auto-paste works.
+ * - `missing`: not granted, or granted to an older build (stale toggle). Entries are only copied.
+ * - `unsupported`: not macOS; auto-paste does not exist there, so nothing is degraded.
+ */
+export type AccessibilityState = 'granted' | 'missing' | 'unsupported';
+
 export const DEFAULT_SETTINGS: Settings = {
   hotkey: 'Command+Shift+V',
   maxHistory: 500,
@@ -98,11 +106,14 @@ export interface IpcChannels {
   CHECK_FOR_UPDATES: 'check-for-updates';
   OPEN_UPDATE_LINK: 'open-update-link';
   SKIP_UPDATE: 'skip-update';
+  INSTALL_UPDATE: 'install-update';
+  GET_ACCESSIBILITY_STATE: 'get-accessibility-state';
 
   // Main → Renderer
   CLIPBOARD_UPDATED: 'clipboard-updated';
   POPUP_WILL_HIDE: 'popup-will-hide';
   UPDATE_STATUS_CHANGED: 'update-status-changed';
+  ACCESSIBILITY_CHANGED: 'accessibility-changed';
 }
 
 export const IPC: IpcChannels = {
@@ -139,9 +150,12 @@ export const IPC: IpcChannels = {
   CHECK_FOR_UPDATES: 'check-for-updates',
   OPEN_UPDATE_LINK: 'open-update-link',
   SKIP_UPDATE: 'skip-update',
+  INSTALL_UPDATE: 'install-update',
   CLIPBOARD_UPDATED: 'clipboard-updated',
   POPUP_WILL_HIDE: 'popup-will-hide',
   UPDATE_STATUS_CHANGED: 'update-status-changed',
+  GET_ACCESSIBILITY_STATE: 'get-accessibility-state',
+  ACCESSIBILITY_CHANGED: 'accessibility-changed',
 };
 
 /**
@@ -170,20 +184,27 @@ export interface AvailableUpdate {
 }
 
 /**
- * What the update checker knows, pushed to the renderer on every change.
+ * What the updater knows, pushed to the renderer on every change.
  * - `idle`: no check has run yet in this session.
  * - `checking`: a request to GitHub is in flight.
  * - `up-to-date`: the latest release is not newer than the running app.
- * - `available`: a newer release exists.
+ * - `available`: a newer release exists. `installFailed` is set after a failed automatic install,
+ *   so the UI offers the manual download instead.
+ * - `downloading`: the user clicked Update and the new version is downloading.
+ * - `installing`: the download is verified; macOS is replacing the app and will relaunch it.
  * - `error`: the last check failed (offline, rate limited, unexpected response).
  */
 export type UpdateStatus = {
   currentVersion: string;
   lastCheckedAt: number | null;
+  /** True when Clippo can install updates itself (packaged macOS build), false for download only. */
+  canInstall: boolean;
 } & (
   | { state: 'idle' }
   | { state: 'checking' }
   | { state: 'up-to-date' }
-  | { state: 'available'; update: AvailableUpdate }
+  | { state: 'available'; update: AvailableUpdate; installFailed: boolean }
+  | { state: 'downloading'; update: AvailableUpdate; percent: number }
+  | { state: 'installing'; update: AvailableUpdate }
   | { state: 'error' }
 );

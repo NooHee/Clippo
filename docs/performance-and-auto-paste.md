@@ -302,7 +302,8 @@ why paste "worked on my machine" during development.
    still returns focus to the previous app (so a manual Cmd+V works), asks macOS to show its
    permission prompt once per session, and posts a notification explaining the "remove and add it
    again" step, which the system prompt does not mention. Clicking it opens the right settings
-   pane. This replaces a silent failure with an actionable message.
+   pane. This replaces a silent failure with an actionable message. A later change makes this
+   proactive: see [accessibility-permission-safeguard.md](accessibility-permission-safeguard.md).
 3. **Post the keystroke as a CGEvent** (`src/main/platform/macos.ts`). A tiny JavaScript for
    Automation script calls `CGEventCreateKeyboardEvent` / `CGEventPost` for Cmd+V (virtual key 9),
    which needs only Accessibility, no Automation permission. The System Events script is kept as a

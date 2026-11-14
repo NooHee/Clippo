@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AvailableUpdate, UpdateStatus } from '../../shared/types';
 import type { LatestRelease, ReleaseSource } from './githubReleases';
+import type { UpdateInstaller } from './updateInstaller';
 import { CHECK_INTERVAL_MS, INITIAL_CHECK_DELAY_MS, UpdateService, type ScheduleFn } from './updateService';
 
 const NOW = 1_700_000_000_000;
@@ -60,7 +61,54 @@ class ManualScheduler {
   }
 }
 
-function setup(options: { currentVersion?: string; arch?: string; autoCheck?: boolean; skipped?: string } = {}) {
+/**
+ * Installer whose download and install are settled by the test, to observe every intermediate
+ * status. A real install never resolves because the app restarts.
+ */
+class FakeInstaller implements UpdateInstaller {
+  readonly calls: string[] = [];
+  progress: (percent: number) => void = () => undefined;
+  private finishDownload: (() => void) | null = null;
+  private failDownload: ((error: Error) => void) | null = null;
+  private failInstall: ((error: Error) => void) | null = null;
+
+  download(version: string, onProgress: (percent: number) => void): Promise<void> {
+    this.calls.push(`download ${version}`);
+    this.progress = onProgress;
+    return new Promise((resolve, reject) => {
+      this.finishDownload = resolve;
+      this.failDownload = reject;
+    });
+  }
+
+  installAndRestart(): Promise<void> {
+    this.calls.push('install');
+    return new Promise((_resolve, reject) => {
+      this.failInstall = reject;
+    });
+  }
+
+  async completeDownload(): Promise<void> {
+    this.finishDownload?.();
+    await settle();
+  }
+
+  async rejectDownload(): Promise<void> {
+    this.failDownload?.(new Error('network lost'));
+    await settle();
+  }
+
+  async rejectInstall(): Promise<void> {
+    this.failInstall?.(new Error('code signature did not pass validation'));
+    await settle();
+  }
+}
+
+const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+function setup(
+  options: { currentVersion?: string; arch?: string; autoCheck?: boolean; skipped?: string; installer?: UpdateInstaller | null } = {},
+) {
   const source = new FakeSource();
   const scheduler = new ManualScheduler();
   const statuses: UpdateStatus[] = [];
@@ -70,6 +118,7 @@ function setup(options: { currentVersion?: string; arch?: string; autoCheck?: bo
     currentVersion: options.currentVersion ?? '0.2.1',
     arch: options.arch ?? 'arm64',
     source,
+    installer: options.installer ?? null,
     schedule: scheduler.schedule,
     now: () => NOW,
     isAutoCheckEnabled: () => settings.autoCheck,
@@ -83,7 +132,7 @@ function setup(options: { currentVersion?: string; arch?: string; autoCheck?: bo
 describe('UpdateService.checkNow', () => {
   it('starts idle with the running version', () => {
     const { service } = setup();
-    expect(service.getStatus()).toEqual({ state: 'idle', currentVersion: '0.2.1', lastCheckedAt: null });
+    expect(service.getStatus()).toEqual({ state: 'idle', currentVersion: '0.2.1', lastCheckedAt: null, canInstall: false });
   });
 
   it('reports a newer release with the download for this Mac and notifies once', async () => {
@@ -97,6 +146,8 @@ describe('UpdateService.checkNow', () => {
       state: 'available',
       currentVersion: '0.2.1',
       lastCheckedAt: NOW,
+      canInstall: false,
+      installFailed: false,
       update: {
         version: '0.3.0',
         releaseUrl: 'https://github.com/NooHee/Clippo/releases/tag/v0.3.0',
@@ -145,7 +196,7 @@ describe('UpdateService.checkNow', () => {
     const { service, source } = setup();
     source.answers.push(new Error('offline'));
 
-    expect(await service.checkNow()).toEqual({ state: 'error', currentVersion: '0.2.1', lastCheckedAt: NOW });
+    expect(await service.checkNow()).toEqual({ state: 'error', currentVersion: '0.2.1', lastCheckedAt: NOW, canInstall: false });
   });
 
   it('keeps showing a found update when a later check fails', async () => {
@@ -166,6 +217,82 @@ describe('UpdateService.checkNow', () => {
 
     expect(source.calls).toBe(1);
     expect(second).toBe(first);
+  });
+});
+
+describe('UpdateService.install', () => {
+  async function withAvailableUpdate() {
+    const installer = new FakeInstaller();
+    const context = setup({ installer });
+    context.source.answers.push(release('0.3.0'));
+    await context.service.checkNow();
+    return { ...context, installer };
+  }
+
+  it('reports that installing is possible when an installer exists', async () => {
+    const { service } = await withAvailableUpdate();
+    expect(service.getStatus().canInstall).toBe(true);
+  });
+
+  it('downloads with whole-percent progress, then installs and restarts', async () => {
+    const { service, installer, statuses } = await withAvailableUpdate();
+
+    void service.install();
+    await settle();
+    installer.progress(10.2);
+    installer.progress(10.8);
+    installer.progress(57.5);
+    await installer.completeDownload();
+
+    expect(installer.calls).toEqual(['download 0.3.0', 'install']);
+    const progress = statuses.filter((s) => s.state === 'downloading').map((s) => (s.state === 'downloading' ? s.percent : -1));
+    expect(progress).toEqual([0, 10, 57]);
+    expect(service.getStatus().state).toBe('installing');
+  });
+
+  it('falls back to the manual download when the download fails', async () => {
+    const { service, installer } = await withAvailableUpdate();
+
+    const installing = service.install();
+    await settle();
+    await installer.rejectDownload();
+    await installing;
+
+    const status = service.getStatus();
+    expect(status.state === 'available' && status.installFailed).toBe(true);
+    expect(installer.calls).toEqual(['download 0.3.0']);
+  });
+
+  it('falls back to the manual download when macOS refuses the update', async () => {
+    const { service, installer } = await withAvailableUpdate();
+
+    const installing = service.install();
+    await settle();
+    await installer.completeDownload();
+    await installer.rejectInstall();
+    await installing;
+
+    const status = service.getStatus();
+    expect(status.state === 'available' && status.installFailed).toBe(true);
+  });
+
+  it('ignores checks and repeated clicks while an update is being applied', async () => {
+    const { service, source, installer } = await withAvailableUpdate();
+
+    void service.install();
+    await settle();
+    void service.install();
+    const status = await service.checkNow();
+
+    expect(status.state).toBe('downloading');
+    expect(source.calls).toBe(1);
+    expect(installer.calls).toEqual(['download 0.3.0']);
+  });
+
+  it('does nothing without an installer or without an update', async () => {
+    const { service, statuses } = setup();
+    await service.install();
+    expect(statuses).toEqual([]);
   });
 });
 

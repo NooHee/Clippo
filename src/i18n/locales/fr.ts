@@ -45,6 +45,18 @@ const fr = {
     newGroup: 'Nouveau groupe',
     newGroupPlaceholder: 'Nom du groupe…',
   },
+  accessibility: {
+    title: 'Collage automatique désactivé',
+    impact: "Clippo a besoin de l'accès Accessibilité pour coller dans l'app que vous utilisiez. En attendant, un clic copie seulement l'élément : collez avec ⌘V.",
+    openSettings: 'Ouvrir les réglages Accessibilité',
+    showSteps: 'Comment corriger',
+    hideSteps: 'Masquer les étapes',
+    steps: {
+      open: 'Activez Clippo dans Confidentialité et sécurité > Accessibilité.',
+      stale: "Déjà activé ? Après une mise à jour, macOS garde l'ancienne autorisation. Sélectionnez Clippo, retirez-le avec le bouton moins, puis ajoutez-le à nouveau avec plus.",
+      autoClear: "Ce message disparaît tout seul dès que l'accès fonctionne.",
+    },
+  },
   settings: {
     sections: {
       general: 'Général',
@@ -54,6 +66,12 @@ const fr = {
       backup: 'Sauvegarde',
       updates: 'Mises à jour',
       danger: 'Zone dangereuse',
+      permissions: 'Autorisations',
+    },
+    accessibility: {
+      label: 'Accessibilité (collage auto)',
+      granted: 'Accordée',
+      fix: 'Désactivée · Corriger…',
     },
     theme: {
       label: 'Thème',
@@ -108,6 +126,10 @@ const fr = {
       checking: 'Vérification…',
       upToDate: 'Vous avez la dernière version.',
       available: 'La version {{version}} est disponible.',
+      installFailed: 'La mise à jour automatique a échoué. Vous pouvez la télécharger.',
+      install: 'Mettre à jour et redémarrer',
+      downloading: 'Téléchargement de la version {{version}}… {{percent}} %',
+      installing: 'Installation de la version {{version}}, Clippo va redémarrer…',
       error: 'Impossible de joindre GitHub. Réessayez plus tard.',
       download: 'Télécharger',
       releaseNotes: 'Notes de version',
@@ -115,6 +137,10 @@ const fr = {
   },
   update: {
     available: 'Clippo {{version}} est disponible',
+    installFailed: 'Mise à jour automatique impossible. Téléchargez la {{version}}.',
+    downloading: 'Téléchargement de Clippo {{version}}… {{percent}} %',
+    installing: 'Installation de Clippo {{version}}. Clippo va redémarrer…',
+    install: 'Mettre à jour',
     download: 'Télécharger',
     releaseNotes: 'Nouveautés',
     skip: 'Ignorer cette version',

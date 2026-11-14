@@ -45,6 +45,18 @@ const en = {
     newGroup: 'New group',
     newGroupPlaceholder: 'Group name…',
   },
+  accessibility: {
+    title: 'Auto-paste is off',
+    impact: 'Clippo needs Accessibility access to paste into the app you were using. Until then, clicking an entry only copies it, so press ⌘V yourself.',
+    openSettings: 'Open Accessibility settings',
+    showSteps: 'How to fix',
+    hideSteps: 'Hide steps',
+    steps: {
+      open: 'Turn Clippo on in Privacy & Security > Accessibility.',
+      stale: 'Already on? After an update macOS keeps the old grant. Select Clippo, remove it with the minus button, then add it again with plus.',
+      autoClear: 'This message goes away by itself once access works.',
+    },
+  },
   settings: {
     sections: {
       general: 'General',
@@ -54,6 +66,12 @@ const en = {
       backup: 'Backup',
       updates: 'Updates',
       danger: 'Danger Zone',
+      permissions: 'Permissions',
+    },
+    accessibility: {
+      label: 'Accessibility (auto-paste)',
+      granted: 'Granted',
+      fix: 'Off · Fix…',
     },
     theme: {
       label: 'Theme',
@@ -108,6 +126,10 @@ const en = {
       checking: 'Checking…',
       upToDate: 'You are on the latest version.',
       available: 'Version {{version}} is available.',
+      installFailed: 'Automatic update failed. You can download it instead.',
+      install: 'Update and restart',
+      downloading: 'Downloading version {{version}}… {{percent}}%',
+      installing: 'Installing version {{version}}, Clippo will restart…',
       error: 'Could not reach GitHub. Try again later.',
       download: 'Download',
       releaseNotes: 'Release notes',
@@ -115,6 +137,10 @@ const en = {
   },
   update: {
     available: 'Clippo {{version}} is available',
+    installFailed: 'Could not update automatically. Download {{version}} instead.',
+    downloading: 'Downloading Clippo {{version}}… {{percent}}%',
+    installing: 'Installing Clippo {{version}}. Clippo will restart…',
+    install: 'Update',
     download: 'Download',
     releaseNotes: "What's new",
     skip: 'Skip this version',

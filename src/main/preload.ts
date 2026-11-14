@@ -39,7 +39,10 @@ const IPC = {
   CHECK_FOR_UPDATES: 'check-for-updates',
   OPEN_UPDATE_LINK: 'open-update-link',
   SKIP_UPDATE: 'skip-update',
+  INSTALL_UPDATE: 'install-update',
   UPDATE_STATUS_CHANGED: 'update-status-changed',
+  GET_ACCESSIBILITY_STATE: 'get-accessibility-state',
+  ACCESSIBILITY_CHANGED: 'accessibility-changed',
 } as const;
 
 contextBridge.exposeInMainWorld('clipstack', {
@@ -127,6 +130,16 @@ contextBridge.exposeInMainWorld('clipstack', {
   openAccessibilitySettings: () =>
     ipcRenderer.invoke(IPC.OPEN_ACCESSIBILITY_SETTINGS),
 
+  getAccessibilityState: () =>
+    ipcRenderer.invoke(IPC.GET_ACCESSIBILITY_STATE),
+
+  /** Pushed by main whenever the Accessibility permission is granted or lost. */
+  onAccessibilityChanged: (callback: (state: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
+    ipcRenderer.on(IPC.ACCESSIBILITY_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC.ACCESSIBILITY_CHANGED, handler);
+  },
+
   /** Main asks the UI to reset before the popup hides, so the next open shows a fresh view. */
   onPopupWillHide: (callback: () => void) => {
     const handler = () => callback();
@@ -148,6 +161,9 @@ contextBridge.exposeInMainWorld('clipstack', {
 
   skipUpdate: () =>
     ipcRenderer.invoke(IPC.SKIP_UPDATE),
+
+  installUpdate: () =>
+    ipcRenderer.invoke(IPC.INSTALL_UPDATE),
 
   onUpdateStatusChanged: (callback: (status: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);

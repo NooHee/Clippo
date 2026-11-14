@@ -7,8 +7,10 @@ import { GroupsView } from './components/GroupsView';
 import { GroupPicker } from './components/GroupPicker';
 import { SettingsPanel } from './components/SettingsPanel';
 import { UpdateBanner } from './components/UpdateBanner';
-import { useClipboardHistory } from './hooks/useClipboardHistory';
 import { useUpdateStatus } from './hooks/useUpdateStatus';
+import { AccessibilityBanner } from './components/AccessibilityBanner';
+import { useClipboardHistory } from './hooks/useClipboardHistory';
+import { useAccessibilityState } from './hooks/useAccessibilityState';
 import { Settings, X } from 'lucide-react';
 import type { ClipboardEntry } from '../shared/types';
 import './styles.css';
@@ -22,6 +24,7 @@ const App: React.FC = () => {
   const [tab, setTab] = useState<Tab>('history');
   const [showSettings, setShowSettings] = useState(false);
   const [pickerEntry, setPickerEntry] = useState<ClipboardEntry | null>(null);
+  const accessibility = useAccessibilityState();
 
   // One settings round trip on mount (and after the settings panel closes) instead of one per concern.
   const applyAppearance = useCallback(async () => {
@@ -83,8 +86,11 @@ const App: React.FC = () => {
         </div>
       </div>
 
+      <AccessibilityBanner state={accessibility} />
+
       {showSettings ? (
         <SettingsPanel
+          accessibility={accessibility}
           onClose={() => { setShowSettings(false); void applyAppearance(); }}
           onClearHistory={clearAll}
           updateStatus={updates.status}

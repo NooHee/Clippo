@@ -1,7 +1,8 @@
 // End-to-end smoke test of the real, built app:
 //   copy -> live list update -> search -> click -> clipboard written -> popup hidden after the
 //   renderer reset handshake -> next open is fresh -> Escape dismisses -> a newer GitHub release
-//   shows the update banner, Download opens the right build, Skip hides it.
+//   shows the update banner, Download opens the right build, Skip hides it, and the in-place
+//   install states (Update, progress, restarting, fallback) render.
 //
 // Run with `npm run test:e2e` (Linux CI: `xvfb-run -a npm run test:e2e`).
 // Intended for Linux/CI. On macOS the paste step would also send a real Cmd+V to whatever app is
@@ -70,6 +71,21 @@ app.whenReady().then(async () => {
   const imageRows = await js(`document.querySelectorAll('.item-image').length`);
   check('the unchanged image is recorded only once across poll ticks', imageRows === 1, `(${imageRows} rows)`);
 
+  // Accessibility warning: off macOS the state is "unsupported", so no banner. Main pushes state
+  // changes over IPC; simulate a revoked and then restored permission and check the banner follows.
+  const bannerText = () => js(`document.querySelector('.accessibility-banner')?.textContent ?? null`);
+  check('no Accessibility banner where auto-paste is unsupported', (await bannerText()) === null);
+  win.webContents.send('accessibility-changed', 'missing');
+  await sleep(150);
+  const shown = await bannerText();
+  check('Accessibility banner appears when the permission is lost', shown !== null && shown.includes('⌘V'), JSON.stringify(shown));
+  if (process.env.CLIPPO_E2E_SCREENSHOT) {
+    require('node:fs').writeFileSync(process.env.CLIPPO_E2E_SCREENSHOT, (await win.webContents.capturePage()).toPNG());
+  }
+  win.webContents.send('accessibility-changed', 'granted');
+  await sleep(150);
+  check('Accessibility banner clears by itself once the permission is back', (await bannerText()) === null);
+
   await js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
   const t1 = Date.now(); while (win.isVisible() && Date.now() - t1 < 2000) await sleep(2);
   check('Escape dismisses the popup', !win.isVisible());
@@ -105,6 +121,22 @@ app.whenReady().then(async () => {
   check('Skip this version hides the banner', (await js(`document.querySelectorAll('.update-banner').length`)) === 0);
   const savedSettings = await js(`window.clipstack.getSettings()`);
   check('the skipped version is remembered in the settings', savedSettings.skippedUpdateVersion === '9.9.9', JSON.stringify(savedSettings.skippedUpdateVersion));
+  check('an unpackaged run cannot install in place, so it offers the download', (await js(`window.clipstack.getUpdateStatus()`)).canInstall === false);
+
+  // In-place install UI: a packaged Mac build pushes these statuses while it downloads and restarts.
+  const offered = { version: '9.9.10', releaseUrl: 'https://github.com/NooHee/Clippo/releases/tag/v9.9.10', downloadUrl: 'https://github.com/NooHee/Clippo/releases/tag/v9.9.10', publishedAt: null, skipped: false };
+  const base = { currentVersion: app.getVersion(), lastCheckedAt: Date.now(), canInstall: true };
+  const push = async (status) => { win.webContents.send('update-status-changed', status); await sleep(150); };
+  const updateBannerText = () => js(`document.querySelector('.update-banner')?.textContent ?? ''`);
+  await push({ ...base, state: 'available', update: offered, installFailed: false });
+  check('a Mac that can install shows an Update button', (await js(`document.querySelector('.update-banner-btn')?.textContent`)) === 'Update');
+  await push({ ...base, state: 'downloading', update: offered, percent: 42 });
+  const progressWidth = await js(`document.querySelector('.update-banner-progress-fill')?.style.width`);
+  check('the banner shows the download progress', (await updateBannerText()).includes('42%') && progressWidth === '42%', JSON.stringify(await updateBannerText()));
+  await push({ ...base, state: 'installing', update: offered });
+  check('the banner says Clippo will restart', (await updateBannerText()).includes('will restart'), JSON.stringify(await updateBannerText()));
+  await push({ ...base, state: 'available', update: offered, installFailed: true });
+  check('a failed install falls back to the download button', (await js(`document.querySelector('.update-banner-btn')?.textContent`)) === 'Download', JSON.stringify(await updateBannerText()));
 
   // Run against a throwaway profile so the developer's real history is never touched.
   console.log(results.join('\n'));

@@ -13,6 +13,7 @@ import type { PopupWindow } from './windows/popupWindow';
 import type { TooltipWindow } from './windows/tooltipWindow';
 import type { PasteService } from './paste/pasteService';
 import type { UpdateService } from './updates/updateService';
+import type { AccessibilityMonitor } from './permissions/accessibilityMonitor';
 import { checkPermissions } from './permissionChecker';
 import { openAccessibilitySettings } from './platform/macos';
 import { perfMark } from './platform/perf';
@@ -28,6 +29,7 @@ export interface IpcDependencies {
   updates: UpdateService;
   /** Opens the download or release notes of the available update in the browser. */
   openUpdateLink: (link: UpdateLink) => void;
+  accessibility: AccessibilityMonitor;
   /** Writes text to the clipboard without the watcher recording it as a new entry. */
   writeText: (text: string) => void;
   /** Same for images; returns false if the image file is gone. */
@@ -177,6 +179,7 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
   on(IPC.GET_UPDATE_STATUS, () => updates.getStatus());
   on(IPC.CHECK_FOR_UPDATES, () => updates.checkNow());
   on(IPC.OPEN_UPDATE_LINK, (link) => deps.openUpdateLink(requireUpdateLink(link)));
+  on(IPC.INSTALL_UPDATE, () => updates.install());
   on(IPC.SKIP_UPDATE, () => {
     const status = updates.getStatus();
     if (status.state !== 'available') return;
@@ -196,6 +199,7 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
   });
   on(IPC.CHECK_PERMISSIONS, () => checkPermissions());
   on(IPC.OPEN_ACCESSIBILITY_SETTINGS, () => openAccessibilitySettings());
+  on(IPC.GET_ACCESSIBILITY_STATE, () => deps.accessibility.refresh());
 }
 
 /** Opens a file picker and parses the chosen JSON file. Undefined when cancelled or unreadable. */

@@ -52,6 +52,7 @@
         {
           "target": "zip",
           "arch": [
+            "x64",
             "arm64"
           ]
         }
@@ -85,6 +86,17 @@
     "directories": {
       "output": "release"
     },
-    "afterPack": "scripts/mac/sign.js"
+    "afterPack": "scripts/mac/sign.js",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "NooHee",
+        "repo": "Clippo",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "~6.3.9"
   }
 }

@@ -143,7 +143,6 @@ These are GitHub settings, not files, so they are listed here.
 - The builds are signed with a stable self-signed certificate (so the Accessibility permission
   survives updates) but are not notarized, so users still need right-click > Open on first launch.
   An Apple Developer ID certificate would remove that step.
-- The app notifies users about new releases and links to the right download (see
-  [update-notifications.md](update-notifications.md)), but does not install them by itself (see that
-  document for why). That relies on what this pipeline guarantees: increasing SemVer tags and
-  consistent asset names (`Clippo-X.Y.Z.dmg`, `Clippo-X.Y.Z-arm64-mac.zip`).
+- The app updates itself from these releases (see [update-notifications.md](update-notifications.md)).
+  That relies on what this pipeline guarantees: increasing SemVer tags, consistent asset names, a
+  `latest-mac.yml` that matches the tag, and the same signing identity on every build.
