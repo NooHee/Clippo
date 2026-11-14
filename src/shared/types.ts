@@ -22,6 +22,10 @@ export interface Settings {
   ignoredApps: string[];
   language: 'en' | 'fr';
   onboardingCompleted?: boolean;
+  /** Look for a new release on GitHub in the background (packaged builds only). */
+  checkForUpdates: boolean;
+  /** A release the user chose to skip: no banner or notification for it. */
+  skippedUpdateVersion?: string;
 }
 
 export interface PermissionStatus {
@@ -48,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   ignoredApps: [],
   language: 'en',
+  checkForUpdates: true,
 };
 
 export interface GroupEntry {
@@ -97,11 +102,17 @@ export interface IpcChannels {
   COMPLETE_ONBOARDING: 'complete-onboarding';
   OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings';
   POPUP_RESET_DONE: 'popup-reset-done';
+  GET_UPDATE_STATUS: 'get-update-status';
+  CHECK_FOR_UPDATES: 'check-for-updates';
+  OPEN_UPDATE_LINK: 'open-update-link';
+  SKIP_UPDATE: 'skip-update';
+  INSTALL_UPDATE: 'install-update';
   GET_ACCESSIBILITY_STATE: 'get-accessibility-state';
 
   // Main → Renderer
   CLIPBOARD_UPDATED: 'clipboard-updated';
   POPUP_WILL_HIDE: 'popup-will-hide';
+  UPDATE_STATUS_CHANGED: 'update-status-changed';
   ACCESSIBILITY_CHANGED: 'accessibility-changed';
 }
 
@@ -135,8 +146,14 @@ export const IPC: IpcChannels = {
   COMPLETE_ONBOARDING: 'complete-onboarding',
   OPEN_ACCESSIBILITY_SETTINGS: 'open-accessibility-settings',
   POPUP_RESET_DONE: 'popup-reset-done',
+  GET_UPDATE_STATUS: 'get-update-status',
+  CHECK_FOR_UPDATES: 'check-for-updates',
+  OPEN_UPDATE_LINK: 'open-update-link',
+  SKIP_UPDATE: 'skip-update',
+  INSTALL_UPDATE: 'install-update',
   CLIPBOARD_UPDATED: 'clipboard-updated',
   POPUP_WILL_HIDE: 'popup-will-hide',
+  UPDATE_STATUS_CHANGED: 'update-status-changed',
   GET_ACCESSIBILITY_STATE: 'get-accessibility-state',
   ACCESSIBILITY_CHANGED: 'accessibility-changed',
 };
@@ -149,3 +166,45 @@ export const IPC: IpcChannels = {
  * - `failed`: the entry could not be written to the clipboard.
  */
 export type PasteResult = 'pasted' | 'copied' | 'failed';
+
+/** Which page of an available update to open in the browser. */
+export type UpdateLink = 'download' | 'release-notes';
+
+/** A release on GitHub that is newer than the running app. */
+export interface AvailableUpdate {
+  /** Normalized version, without the `v` prefix (for example `0.3.0`). */
+  version: string;
+  /** The GitHub Release page, with the release notes. */
+  releaseUrl: string;
+  /** The build for this Mac's architecture, or the release page when none matches. */
+  downloadUrl: string;
+  publishedAt: string | null;
+  /** The user chose "Skip this version": shown in Settings, but no banner or notification. */
+  skipped: boolean;
+}
+
+/**
+ * What the updater knows, pushed to the renderer on every change.
+ * - `idle`: no check has run yet in this session.
+ * - `checking`: a request to GitHub is in flight.
+ * - `up-to-date`: the latest release is not newer than the running app.
+ * - `available`: a newer release exists. `installFailed` is set after a failed automatic install,
+ *   so the UI offers the manual download instead.
+ * - `downloading`: the user clicked Update and the new version is downloading.
+ * - `installing`: the download is verified; macOS is replacing the app and will relaunch it.
+ * - `error`: the last check failed (offline, rate limited, unexpected response).
+ */
+export type UpdateStatus = {
+  currentVersion: string;
+  lastCheckedAt: number | null;
+  /** True when Clippo can install updates itself (packaged macOS build), false for download only. */
+  canInstall: boolean;
+} & (
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'up-to-date' }
+  | { state: 'available'; update: AvailableUpdate; installFailed: boolean }
+  | { state: 'downloading'; update: AvailableUpdate; percent: number }
+  | { state: 'installing'; update: AvailableUpdate }
+  | { state: 'error' }
+);

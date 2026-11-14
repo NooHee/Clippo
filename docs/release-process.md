@@ -140,8 +140,9 @@ These are GitHub settings, not files, so they are listed here.
   explicit error, and only the PR title matters, not every commit on the branch.
 - Releases are not fully hands-off: someone has to merge the release PR. That is intended for a
   desktop app, where each release reaches users' machines.
-- The builds are not code signed or notarized (`CSC_IDENTITY_AUTO_DISCOVERY: false`), so users still
-  need right-click > Open on first launch. Signing would slot into the `build` job with an Apple
-  Developer certificate stored as secrets.
-- No auto-update channel yet. Because releases now have reliable, increasing versions and consistent
-  asset names, adding `electron-updater` later is straightforward.
+- The builds are signed with a stable self-signed certificate (so the Accessibility permission
+  survives updates) but are not notarized, so users still need right-click > Open on first launch.
+  An Apple Developer ID certificate would remove that step.
+- The app updates itself from these releases (see [update-notifications.md](update-notifications.md)).
+  That relies on what this pipeline guarantees: increasing SemVer tags, consistent asset names, a
+  `latest-mac.yml` that matches the tag, and the same signing identity on every build.

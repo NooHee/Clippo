@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import { dialog, ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type WebContents } from 'electron';
-import { IPC, type PasteResult, type Settings } from '../shared/types';
+import { IPC, type PasteResult, type Settings, type UpdateLink } from '../shared/types';
 import type { HistoryRepository } from './storage/historyRepository';
 import { isEntryType } from './storage/historyRepository';
 import type { SettingsRepository } from './storage/settingsRepository';
@@ -12,6 +12,7 @@ import type { ImageStore } from './clipboard/imageStore';
 import type { PopupWindow } from './windows/popupWindow';
 import type { TooltipWindow } from './windows/tooltipWindow';
 import type { PasteService } from './paste/pasteService';
+import type { UpdateService } from './updates/updateService';
 import type { AccessibilityMonitor } from './permissions/accessibilityMonitor';
 import { checkPermissions } from './permissionChecker';
 import { openAccessibilitySettings } from './platform/macos';
@@ -25,6 +26,9 @@ export interface IpcDependencies {
   groups: GroupRepository;
   images: ImageStore;
   paste: PasteService;
+  updates: UpdateService;
+  /** Opens the download or release notes of the available update in the browser. */
+  openUpdateLink: (link: UpdateLink) => void;
   accessibility: AccessibilityMonitor;
   /** Writes text to the clipboard without the watcher recording it as a new entry. */
   writeText: (text: string) => void;
@@ -51,13 +55,18 @@ function requireId(value: unknown): number {
   return value;
 }
 
+function requireUpdateLink(value: unknown): UpdateLink {
+  if (value !== 'download' && value !== 'release-notes') throw new TypeError('Expected an update link');
+  return value;
+}
+
 function requireString(value: unknown): string {
   if (!isString(value)) throw new TypeError('Expected a string');
   return value;
 }
 
 export function registerIpcHandlers(deps: IpcDependencies): void {
-  const { popup, tooltip, history, settings, groups, images, paste } = deps;
+  const { popup, tooltip, history, settings, groups, images, paste, updates } = deps;
   const parent: BrowserWindow = popup.browserWindow;
   const popupContents = parent.webContents;
   const on = (channel: string, handler: Handler): void => handle(channel, popupContents, handler);
@@ -164,6 +173,18 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
     const json = await pickJsonFile(parent);
     if (json === undefined) return { success: false, imported: 0, duplicates: 0, errors: [] };
     return importHistory(history, json);
+  });
+
+  // Updates: the renderer never sends a URL or version, main uses its own validated status.
+  on(IPC.GET_UPDATE_STATUS, () => updates.getStatus());
+  on(IPC.CHECK_FOR_UPDATES, () => updates.checkNow());
+  on(IPC.OPEN_UPDATE_LINK, (link) => deps.openUpdateLink(requireUpdateLink(link)));
+  on(IPC.INSTALL_UPDATE, () => updates.install());
+  on(IPC.SKIP_UPDATE, () => {
+    const status = updates.getStatus();
+    if (status.state !== 'available') return;
+    settings.update({ skippedUpdateVersion: status.update.version });
+    updates.refresh();
   });
 
   // System

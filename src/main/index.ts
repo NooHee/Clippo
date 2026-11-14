@@ -1,6 +1,6 @@
 import path from 'node:path';
-import { app, clipboard, globalShortcut, Menu, nativeImage, systemPreferences, Tray } from 'electron';
-import { DEFAULT_SETTINGS, IPC, type AccessibilityState, type Settings } from '../shared/types';
+import { app, clipboard, globalShortcut, Menu, nativeImage, net, Notification, shell, systemPreferences, Tray } from 'electron';
+import { DEFAULT_SETTINGS, IPC, type AccessibilityState, type Settings, type UpdateLink, type UpdateStatus } from '../shared/types';
 import { createStorageCodec } from './encrypting';
 import { PersistentJsonStore } from './storage/persistentJsonStore';
 import { createEmptyHistory, HistoryRepository, parseHistoryData } from './storage/historyRepository';
@@ -18,10 +18,16 @@ import { describeTray, type TrayActions } from './tray/trayMenu';
 import { frontmostAppName, openAccessibilitySettings, sendPasteKeystroke } from './platform/macos';
 import { perfMark, perfSinceStart } from './platform/perf';
 import { registerIpcHandlers } from './ipc';
+import { GitHubReleaseSource, isTrustedGitHubUrl } from './updates/githubReleases';
+import { ElectronUpdaterInstaller, type UpdateInstaller } from './updates/updateInstaller';
+import { describeUpdateNotice, type UpdateNotice } from './updates/updateNotifications';
+import { UpdateService, type ScheduleFn } from './updates/updateService';
 
 const isDev = process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
 const FOCUS_SETTLE_MS = 50;
+/** Where releases are published (see docs/release-process.md). */
+const RELEASES_REPOSITORY = { owner: 'NooHee', repo: 'Clippo' };
 /** Distributed notification macOS posts when an app is added, removed or toggled in Accessibility. */
 const ACCESSIBILITY_CHANGED_NOTIFICATION = 'com.apple.accessibility.api';
 
@@ -52,6 +58,7 @@ function bootstrap(): void {
   const settings = new SettingsRepository(settingsStore);
 
   let tray: Tray | null = null;
+  let renderTray: () => void = () => undefined;
   const accessibilityGuard = new AccessibilityGuard();
   const accessibility = new AccessibilityMonitor({
     isSupported: isMac,
@@ -74,6 +81,56 @@ function bootstrap(): void {
     // Catches a permission removed while Clippo was in the background before the user acts on it.
     onShow: () => accessibility.refresh(),
   });
+
+  // Update checks never run before the first check delay, so they add nothing to startup.
+  const updates = new UpdateService({
+    currentVersion: app.getVersion(),
+    arch: process.arch,
+    source: new GitHubReleaseSource({
+      ...RELEASES_REPOSITORY,
+      userAgent: `Clippo/${app.getVersion()}`,
+      fetch: (url, init) => net.fetch(url, init),
+    }),
+    installer: createUpdateInstaller(),
+    schedule: scheduleUnref,
+    now: Date.now,
+    isAutoCheckEnabled: () => settings.get().checkForUpdates,
+    skippedVersion: () => settings.get().skippedUpdateVersion,
+    onStatusChange: (status) => {
+      popup.browserWindow.webContents.send(IPC.UPDATE_STATUS_CHANGED, status);
+      renderTray();
+    },
+    onUpdateFound: (update) => notifyUpdate({ kind: 'available', update, canInstall: updates.getStatus().canInstall }),
+  });
+
+  /** The URL comes from our own validated status, never from the renderer. */
+  const openUpdateLink = (link: UpdateLink): void => {
+    const status = updates.getStatus();
+    if (status.state !== 'available') return;
+    const url = link === 'download' ? status.update.downloadUrl : status.update.releaseUrl;
+    if (isTrustedGitHubUrl(url)) void shell.openExternal(url);
+  };
+
+  /** One click: install in place when possible, otherwise open the download. */
+  const applyUpdate = (): void => {
+    const status = updates.getStatus();
+    if (status.state === 'available' && status.canInstall && !status.installFailed) {
+      void updates.install();
+    } else {
+      openUpdateLink('download');
+    }
+  };
+
+  const notifyUpdate = (notice: UpdateNotice): void => {
+    const { title, body } = describeUpdateNotice(notice, settings.get().language);
+    showNotification(title, body, notice.kind === 'available' ? applyUpdate : undefined);
+  };
+
+  /** "Check for Updates…" from the tray: the popup is closed, so always answer with a notification. */
+  const checkForUpdatesFromTray = async (): Promise<void> => {
+    const status = await updates.checkNow();
+    notifyUpdate(noticeFor(status));
+  };
 
   // 2. Load stored data now (disk read + Keychain decryption) instead of on the first open.
   const images = new ImageStore(path.join(userData, 'images'));
@@ -132,6 +189,8 @@ function bootstrap(): void {
     groups,
     images,
     paste,
+    updates,
+    openUpdateLink,
     accessibility,
     writeText: (text) => {
       clipboard.writeText(text);
@@ -148,6 +207,7 @@ function bootstrap(): void {
       app.setLoginItemSettings({ openAtLogin: saved.launchAtLogin });
       watcher.updateInterval(saved.pollIntervalMs);
       registerHotkey(saved.hotkey, () => popup.toggle());
+      updates.refresh();
       renderTray();
     },
   });
@@ -155,11 +215,14 @@ function bootstrap(): void {
   const trayActions: TrayActions = {
     toggle: () => popup.toggle(),
     openAccessibilitySettings: () => void openAccessibilitySettings(),
+    installUpdate: applyUpdate,
+    downloadUpdate: () => openUpdateLink('download'),
+    checkForUpdates: () => void checkForUpdatesFromTray(),
     quit: () => app.quit(),
   };
   tray = createTray(trayActions.toggle);
-  const renderTray = (): void => {
-    if (tray) applyTrayState(tray, accessibility.current, settings.get().language, trayActions);
+  renderTray = (): void => {
+    if (tray) applyTrayState(tray, accessibility.current, settings.get().language, trayActions, updates.getStatus());
   };
   accessibility.onChange((state) => {
     renderTray();
@@ -171,10 +234,13 @@ function bootstrap(): void {
   registerHotkey(settings.get().hotkey, () => popup.toggle());
   app.setLoginItemSettings({ openAtLogin: settings.get().launchAtLogin });
   watcher.start(settings.get().pollIntervalMs);
+  // Development and test runs (unpackaged) never phone home on their own; "Check now" still works.
+  if (app.isPackaged) updates.start();
 
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     watcher.stop();
+    updates.stop();
     accessibility.stop();
     // Debounced writes may still be pending; the event loop will not run again after this.
     [settingsStore, historyStore, groupStore].forEach((store) => {
@@ -198,8 +264,55 @@ function createTray(onToggle: () => void): Tray {
   return tray;
 }
 
-function applyTrayState(tray: Tray, state: AccessibilityState, language: Settings['language'], actions: TrayActions): void {
-  const { tooltip, title, menu } = describeTray(state, language, actions);
+function showNotification(title: string, body: string, onClick?: () => void): void {
+  if (!Notification.isSupported()) return;
+  const notification = new Notification({ title, body });
+  if (onClick) notification.on('click', onClick);
+  notification.show();
+}
+
+/** What to tell the user after a manual check from the tray. */
+function noticeFor(status: UpdateStatus): UpdateNotice {
+  switch (status.state) {
+    case 'available':
+    case 'downloading':
+    case 'installing':
+      return { kind: 'available', update: status.update, canInstall: status.canInstall };
+    case 'error':
+      return { kind: 'check-failed' };
+    default:
+      return { kind: 'up-to-date', currentVersion: status.currentVersion };
+  }
+}
+
+/**
+ * In-place installs need a packaged macOS app (Squirrel.Mac and the app-update.yml that
+ * electron-builder writes into the bundle). electron-updater is loaded on the first install, so
+ * it adds nothing to startup.
+ */
+function createUpdateInstaller(): UpdateInstaller | null {
+  if (!isMac || !app.isPackaged) return null;
+  return new ElectronUpdaterInstaller({
+    load: async () => (await import('electron-updater')).autoUpdater,
+    schedule: scheduleUnref,
+  });
+}
+
+/** One-shot timer that does not keep the process alive on its own. */
+const scheduleUnref: ScheduleFn = (callback, delayMs) => {
+  const timer = setTimeout(callback, delayMs);
+  timer.unref();
+  return () => clearTimeout(timer);
+};
+
+function applyTrayState(
+  tray: Tray,
+  state: AccessibilityState,
+  language: Settings['language'],
+  actions: TrayActions,
+  update: UpdateStatus,
+): void {
+  const { tooltip, title, menu } = describeTray(state, language, actions, update);
   tray.setToolTip(tooltip);
   if (isMac) tray.setTitle(title);
   tray.setContextMenu(Menu.buildFromTemplate(menu));

@@ -110,9 +110,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: dist-files
+          # latest-mac.yml and the blockmaps are what the in-app updater reads.
           path: |
             release/*.dmg
             release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
           if-no-files-found: error
           retention-days: 1
 
@@ -163,10 +166,12 @@ jobs:
       - name: Check artifact version
         run: |
           ls -l release/
-          ls release/*"-${VERSION}"*.dmg release/*"-${VERSION}"*-mac.zip
+          ls release/*"-${VERSION}"*.dmg release/*"-${VERSION}"-mac.zip release/*"-${VERSION}"-arm64-mac.zip
+          # The in-app updater installs whatever latest-mac.yml points to, so it must describe this release.
+          grep -qx "version: ${VERSION}" release/latest-mac.yml
 
       - name: Attach builds to the release
-        run: gh release upload "$TAG" release/*.dmg release/*.zip --clobber
+        run: gh release upload "$TAG" release/*.dmg release/*.zip release/*.blockmap release/latest-mac.yml --clobber
 
       - name: Add download instructions to the release notes
         run: |
@@ -177,6 +182,9 @@ jobs:
 
           - `Clippo-*-arm64-mac.zip`: Apple Silicon (M1 and later). Unzip it and drag Clippo to Applications.
           - `Clippo-*.dmg`: Intel Mac.
+
+          Already using Clippo 0.4 or later? Click Update in the app instead: it installs the new version and restarts.
+          (`latest-mac.yml`, the `.blockmap` files and `Clippo-*-mac.zip` are used by that in-app updater.)
 
           First launch: right-click the app and choose Open to get past Gatekeeper (the app is not notarized).
           NOTES
