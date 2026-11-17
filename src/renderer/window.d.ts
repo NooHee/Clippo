@@ -1,11 +1,12 @@
-import type { ClipboardEntry, ClipboardEntryType, ClipboardGroup, GroupEntry, Settings, PermissionStatus, PasteResult, AccessibilityState } from '../shared/types';
+import type { ClipboardEntrySummary, ClipboardGroupSummary, GroupEntrySummary, Settings, PermissionStatus, PasteResult, AccessibilityState, TooltipTarget } from '../shared/types';
 
 interface ClipStackBridge {
-  getHistory: (query?: string) => Promise<ClipboardEntry[]>;
-  searchHistory: (query: string) => Promise<ClipboardEntry[]>;
-  pasteEntry: (id: number, content: string) => Promise<PasteResult>;
+  getHistory: (query?: string) => Promise<ClipboardEntrySummary[]>;
+  searchHistory: (query: string) => Promise<ClipboardEntrySummary[]>;
+  pasteEntry: (id: number) => Promise<PasteResult>;
   deleteEntry: (id: number) => Promise<void>;
-  pinEntry: (id: number) => Promise<void>;
+  /** Resolves to the updated row, or null if the entry no longer exists. */
+  pinEntry: (id: number) => Promise<ClipboardEntrySummary | null>;
   clearHistory: () => Promise<void>;
   hideWindow: () => Promise<void>;
   getSettings: () => Promise<Settings>;
@@ -14,17 +15,15 @@ interface ClipStackBridge {
   importSettings: () => Promise<Partial<Settings> | null>;
   exportHistory: () => Promise<{ success: boolean }>;
   importHistory: () => Promise<{ success: boolean; imported: number; duplicates: number; errors: string[] }>;
-  getGroups: () => Promise<ClipboardGroup[]>;
-  createGroup: (name: string) => Promise<ClipboardGroup>;
+  getGroups: () => Promise<ClipboardGroupSummary[]>;
+  createGroup: (name: string) => Promise<ClipboardGroupSummary>;
   deleteGroup: (id: number) => Promise<void>;
   renameGroup: (id: number, name: string) => Promise<void>;
-  addToGroup: (groupId: number, content: string, type: ClipboardEntryType, preview: string, imageName?: string) => Promise<GroupEntry | null>;
+  addToGroup: (groupId: number, historyEntryId: number) => Promise<GroupEntrySummary | null>;
   removeFromGroup: (groupId: number, entryId: number) => Promise<void>;
-  pasteGroupEntry: (content: string) => Promise<PasteResult>;
+  pasteGroupEntry: (groupId: number, entryId: number) => Promise<PasteResult>;
   browseForApp: () => Promise<string | null>;
-  getImagePath: (imageName: string) => Promise<string | null>;
-  pasteImage: (imageName: string) => Promise<PasteResult>;
-  showTooltip: (text: string) => Promise<void>;
+  showTooltip: (target: TooltipTarget) => Promise<void>;
   hideTooltip: () => Promise<void>;
   checkPermissions: () => Promise<PermissionStatus>;
   completeOnboarding: () => Promise<void>;
@@ -33,7 +32,7 @@ interface ClipStackBridge {
   onAccessibilityChanged: (callback: (state: AccessibilityState) => void) => () => void;
   onPopupWillHide: (callback: () => void) => () => void;
   notifyPopupResetDone: () => void;
-  onClipboardUpdated: (callback: (entry: ClipboardEntry) => void) => () => void;
+  onClipboardUpdated: (callback: (entry: ClipboardEntrySummary) => void) => () => void;
 }
 
 declare global {

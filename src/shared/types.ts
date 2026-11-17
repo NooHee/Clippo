@@ -11,6 +11,13 @@ export interface ClipboardEntry {
   imageName?: string; // For image type entries, stores the image filename
 }
 
+/**
+ * What the popup receives for one history row: everything it renders and nothing more.
+ * The full `content` stays in the main process. Copying it to the renderer on every open and
+ * every search keystroke made the cost of the list grow with the size of what was copied.
+ */
+export type ClipboardEntrySummary = Pick<ClipboardEntry, 'id' | 'type' | 'preview' | 'createdAt' | 'pinnedAt' | 'imageName'>;
+
 export interface Settings {
   hotkey: string;
   maxHistory: number;
@@ -99,6 +106,16 @@ export interface ClipboardGroup {
   entries: GroupEntry[];
 }
 
+/** Same idea as ClipboardEntrySummary for groups: previews only, content stays in main. */
+export type GroupEntrySummary = Omit<GroupEntry, 'content'>;
+
+export interface ClipboardGroupSummary extends Omit<ClipboardGroup, 'entries'> {
+  entries: GroupEntrySummary[];
+}
+
+/** Which entry the hover tooltip should show. The main process looks the text up itself. */
+export type TooltipTarget = { kind: 'history'; id: number } | { kind: 'group'; groupId: number; entryId: number };
+
 export interface IpcChannels {
   // Renderer → Main
   GET_HISTORY: 'get-history';
@@ -114,8 +131,6 @@ export interface IpcChannels {
   IMPORT_SETTINGS: 'import-settings';
   EXPORT_HISTORY: 'export-history';
   IMPORT_HISTORY: 'import-history';
-  GET_IMAGE_PATH: 'get-image-path';
-  PASTE_IMAGE: 'paste-image';
   GET_GROUPS: 'get-groups';
   CREATE_GROUP: 'create-group';
   DELETE_GROUP: 'delete-group';
@@ -152,8 +167,6 @@ export const IPC: IpcChannels = {
   IMPORT_SETTINGS: 'import-settings',
   EXPORT_HISTORY: 'export-history',
   IMPORT_HISTORY: 'import-history',
-  GET_IMAGE_PATH: 'get-image-path',
-  PASTE_IMAGE: 'paste-image',
   GET_GROUPS: 'get-groups',
   CREATE_GROUP: 'create-group',
   DELETE_GROUP: 'delete-group',
@@ -182,3 +195,4 @@ export const IPC: IpcChannels = {
  * - `failed`: the entry could not be written to the clipboard.
  */
 export type PasteResult = 'pasted' | 'copied' | 'failed';
+

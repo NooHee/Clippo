@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { ClipboardEntry, ClipboardGroup } from '../../shared/types';
+import type { ClipboardEntrySummary, ClipboardGroupSummary } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
 
 interface Props {
-  entry: ClipboardEntry;
+  entry: ClipboardEntrySummary;
   onClose: () => void;
 }
 
 export const GroupPicker: React.FC<Props> = ({ entry, onClose }) => {
   const { translate } = useLocalization();
-  const [groups, setGroups] = useState<ClipboardGroup[]>([]);
+  const [groups, setGroups] = useState<ClipboardGroupSummary[]>([]);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [added, setAdded] = useState<number | null>(null);
@@ -24,7 +24,7 @@ export const GroupPicker: React.FC<Props> = ({ entry, onClose }) => {
   }, [creating]);
 
   const addTo = async (groupId: number) => {
-    await window.clipstack.addToGroup(groupId, entry.content, entry.type, entry.preview, entry.imageName);
+    await window.clipstack.addToGroup(groupId, entry.id);
     setAdded(groupId);
     setTimeout(onClose, 600);
   };

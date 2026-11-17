@@ -1,5 +1,6 @@
 import { MAX_TEXT_LENGTH, type ClipboardEntry, type ClipboardEntryType } from '../../shared/types';
 import { fingerprintClipboardImage, type ImageClipboardReader } from './imageFingerprint';
+import type { ClipboardChangeSource } from './clipboardChangeSource';
 
 export interface WatchedClipboard extends ImageClipboardReader {
   readText(): string;
@@ -27,6 +28,11 @@ export interface ClipboardWatcherDeps {
   /** Resolves the name of the frontmost application, without blocking the main thread. */
   frontmostAppName: () => Promise<string | null>;
   onNewEntry: (entry: ClipboardEntry) => void;
+  /**
+   * Reports clipboard changes without reading the content (macOS). When absent, or when it stops
+   * working, the watcher polls the content instead.
+   */
+  changeSource?: ClipboardChangeSource;
   platform?: string;
   logger?: Pick<Console, 'error'>;
 }
@@ -34,10 +40,13 @@ export interface ClipboardWatcherDeps {
 /**
  * Watches the system clipboard for new text and images.
  *
- * Electron has no clipboard change notification, so we poll. The poll is designed to be close to
- * free when nothing changed: reading text and the format list is cheap, and images are compared
- * through a fingerprint of their raw bytes instead of being decoded and re-encoded each tick.
- * Ticks are chained with setTimeout so a slow tick can never overlap the next one.
+ * Electron has no clipboard change notification, so there are two modes:
+ *  - change events (macOS): a ClipboardChangeSource watches the pasteboard change counter and the
+ *    watcher reads the clipboard only after it changed. While idle, Clippo reads nothing.
+ *  - polling (fallback, Linux and Windows): every tick reads the text and the format list. Images
+ *    are compared through a fingerprint of their raw bytes instead of being decoded each tick.
+ *    Ticks are chained with setTimeout so a slow tick can never overlap the next one.
+ * Both modes run the same `checkNow`, so detection behaves identically.
  */
 export class ClipboardWatcher {
   private lastText = '';
@@ -45,6 +54,9 @@ export class ClipboardWatcher {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private running = false;
   private intervalMs = 500;
+  private mode: 'events' | 'polling' = 'polling';
+  private checking: Promise<void> | null = null;
+  private recheckRequested = false;
 
   constructor(private readonly deps: ClipboardWatcherDeps) {}
 
@@ -53,20 +65,32 @@ export class ClipboardWatcher {
     this.intervalMs = intervalMs;
     this.running = true;
     this.rememberCurrentContent();
-    this.scheduleNextTick();
+    if (this.deps.changeSource) this.startChangeEvents(this.deps.changeSource);
+    else this.startPolling();
   }
 
   stop(): void {
     this.running = false;
+    this.deps.changeSource?.stop();
     this.clearTimer();
   }
 
   /** Applies immediately when idle; a tick in progress picks it up when it schedules the next one. */
   updateInterval(intervalMs: number): void {
     this.intervalMs = intervalMs;
+    if (!this.running) return;
+    if (this.mode === 'events' && this.deps.changeSource) {
+      this.startChangeEvents(this.deps.changeSource);
+      return;
+    }
     if (this.timer === null) return;
     this.clearTimer();
     this.scheduleNextTick();
+  }
+
+  /** Current detection mode, exposed for diagnostics and tests. */
+  get detectionMode(): 'events' | 'polling' {
+    return this.mode;
   }
 
   /**
@@ -115,6 +139,48 @@ export class ClipboardWatcher {
     });
   }
 
+  private startChangeEvents(source: ClipboardChangeSource): void {
+    this.mode = 'events';
+    source.start(this.intervalMs, {
+      onChange: () => this.requestCheck(),
+      onUnavailable: (reason) => {
+        if (!this.running) return;
+        this.logger.error('[Clippo] Clipboard change events unavailable, falling back to polling', reason);
+        this.startPolling();
+      },
+    });
+  }
+
+  private startPolling(): void {
+    this.mode = 'polling';
+    this.clearTimer();
+    this.scheduleNextTick();
+  }
+
+  /**
+   * Runs a check now, or once more after the one in progress if a change arrives meanwhile.
+   * Checks never overlap, and a burst of changes costs at most two checks.
+   */
+  private requestCheck(): void {
+    if (this.checking) {
+      this.recheckRequested = true;
+      return;
+    }
+    this.checking = this.checkNow()
+      .catch((error: unknown) => this.logger.error('[Clippo] Clipboard check failed', error))
+      .finally(() => {
+        this.checking = null;
+        if (this.recheckRequested && this.running) {
+          this.recheckRequested = false;
+          this.requestCheck();
+        }
+      });
+  }
+
+  private get logger(): Pick<Console, 'error'> {
+    return this.deps.logger ?? console;
+  }
+
   private fingerprint(): string | null {
     return fingerprintClipboardImage(this.deps.clipboard, this.deps.platform);
   }
@@ -130,7 +196,7 @@ export class ClipboardWatcher {
     this.timer = setTimeout(() => {
       this.timer = null;
       this.checkNow()
-        .catch((error: unknown) => (this.deps.logger ?? console).error('[Clippo] Clipboard check failed', error))
+        .catch((error: unknown) => this.logger.error('[Clippo] Clipboard check failed', error))
         .finally(() => {
           if (this.running) this.scheduleNextTick();
         });

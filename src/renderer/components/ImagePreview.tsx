@@ -1,28 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
+import { thumbnailUrl } from '../../shared/thumbnailUrl';
 
 interface ImagePreviewProps {
   imageName: string;
   createdAt: number;
 }
 
+/**
+ * The thumbnail is a plain URL served by the main process through the `clippo-image://`
+ * protocol, so Chromium loads, decodes and caches it off the main thread. `loading="lazy"`
+ * skips rows that are scrolled out of view.
+ */
 export const ImagePreview: React.FC<ImagePreviewProps> = ({ imageName, createdAt }) => {
-  const [imagePath, setImagePath] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    window.clipstack.getImagePath(imageName).then(setImagePath).catch(() => setImagePath(null));
-  }, [imageName]);
-
-  if (!imagePath) {
-    return <div className="item-content"><span className="item-preview">[Image Loading...]</span></div>;
+  if (failed) {
+    return <div className="item-content"><span className="item-preview">[Image]</span></div>;
   }
 
   return (
     <div className="item-image-container">
       <img
-        src={imagePath}
+        src={thumbnailUrl(imageName)}
         alt="clipboard item"
         className="item-image"
+        loading="lazy"
         decoding="async"
+        onError={() => setFailed(true)}
       />
       <span className="item-time">{new Date(createdAt).toLocaleDateString()}</span>
     </div>

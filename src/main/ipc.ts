@@ -2,13 +2,11 @@ import fs from 'node:fs/promises';
 import { dialog, ipcMain, type BrowserWindow, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import { IPC, type PasteResult, type Settings } from '../shared/types';
 import type { HistoryRepository } from './storage/historyRepository';
-import { isEntryType } from './storage/historyRepository';
 import type { SettingsRepository } from './storage/settingsRepository';
 import { parseSettings } from './storage/settingsRepository';
 import type { GroupRepository } from './storage/groupRepository';
 import { isFiniteNumber, isString } from './storage/guards';
 import { importHistory } from './storage/historyImport';
-import type { ImageStore } from './clipboard/imageStore';
 import type { PopupWindow } from './windows/popupWindow';
 import type { TooltipWindow } from './windows/tooltipWindow';
 import type { PasteService } from './paste/pasteService';
@@ -17,6 +15,7 @@ import { checkPermissions } from './permissionChecker';
 import { openAccessibilitySettings } from './platform/macos';
 import { perfMark } from './platform/perf';
 import { isAppUrl } from './security/webContentsGuard';
+import { parseTooltipTarget, truncateForTooltip } from './windows/tooltipText';
 
 export interface IpcDependencies {
   popup: PopupWindow;
@@ -24,7 +23,6 @@ export interface IpcDependencies {
   history: HistoryRepository;
   settings: SettingsRepository;
   groups: GroupRepository;
-  images: ImageStore;
   paste: PasteService;
   accessibility: AccessibilityMonitor;
   /** Writes text to the clipboard without the watcher recording it as a new entry. */
@@ -62,46 +60,44 @@ function requireString(value: unknown): string {
 }
 
 export function registerIpcHandlers(deps: IpcDependencies): void {
-  const { popup, tooltip, history, settings, groups, images, paste } = deps;
+  const { popup, tooltip, history, settings, groups, paste } = deps;
   const parent: BrowserWindow = popup.browserWindow;
   const popupContents = parent.webContents;
   const on = (channel: string, handler: Handler): void => handle(channel, popupContents, popup.appUrl, handler);
 
-  // History
+  // History. The renderer only ever receives previews and refers to entries by id; full content
+  // stays in this process (smaller IPC payloads, and the renderer cannot choose what gets pasted).
   on(IPC.GET_HISTORY, (query) => history.list(isString(query) ? query : ''));
   on(IPC.SEARCH_HISTORY, (query) => history.list(requireString(query)));
   on(IPC.DELETE_ENTRY, (id) => history.delete(requireId(id)));
   on(IPC.PIN_ENTRY, (id) => history.togglePin(requireId(id)));
   on(IPC.CLEAR_HISTORY, () => history.clearUnpinned());
 
+  /** Puts a text or image entry on the clipboard, then pastes it into the app the user came from. */
+  const pasteContent = async (entry: { content: string; type: string; imageName?: string }): Promise<PasteResult> => {
+    if (entry.type === 'image') {
+      if (!entry.imageName || !deps.writeImage(entry.imageName)) return 'failed';
+    } else {
+      deps.writeText(entry.content);
+    }
+    return paste.pasteIntoPreviousApp();
+  };
+
   // Paste
-  on(IPC.PASTE_ENTRY, async (id, content): Promise<PasteResult> => {
-    const done = perfMark('paste.text');
-    history.markUsed(requireId(id));
-    deps.writeText(requireString(content));
-    const result = await paste.pasteIntoPreviousApp();
+  on(IPC.PASTE_ENTRY, async (id): Promise<PasteResult> => {
+    const done = perfMark('paste.entry');
+    const entry = history.find(requireId(id));
+    if (!entry) return 'failed';
+    history.markUsed(entry.id);
+    const result = await pasteContent(entry);
     done();
     return result;
   });
-  on(IPC.PASTE_GROUP_ENTRY, async (content): Promise<PasteResult> => {
-    deps.writeText(requireString(content));
-    return paste.pasteIntoPreviousApp();
-  });
-  on(IPC.PASTE_IMAGE, async (imageName): Promise<PasteResult> => {
-    if (!deps.writeImage(requireString(imageName))) return 'failed';
-    return paste.pasteIntoPreviousApp();
+  on(IPC.PASTE_GROUP_ENTRY, async (groupId, entryId): Promise<PasteResult> => {
+    const entry = groups.findEntry(requireId(groupId), requireId(entryId));
+    return entry ? pasteContent(entry) : 'failed';
   });
   on(IPC.HIDE_WINDOW, () => paste.dismiss());
-
-  // Images
-  on(IPC.GET_IMAGE_PATH, (imageName) => {
-    try {
-      return images.thumbnailDataUrl(requireString(imageName));
-    } catch (error) {
-      console.error('[Clippo] Failed to load image thumbnail', error);
-      return null;
-    }
-  });
 
   // Settings
   on(IPC.GET_SETTINGS, () => settings.get());
@@ -136,22 +132,21 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
   on(IPC.CREATE_GROUP, (name) => groups.create(requireString(name)));
   on(IPC.DELETE_GROUP, (id) => groups.delete(requireId(id)));
   on(IPC.RENAME_GROUP, (id, name) => groups.rename(requireId(id), requireString(name)));
-  on(IPC.ADD_TO_GROUP, (groupId, content, type, preview, imageName) => {
-    if (!isEntryType(type)) throw new TypeError('Invalid entry type');
-    return groups.addEntry(
-      requireId(groupId),
-      requireString(content),
-      type,
-      requireString(preview),
-      isString(imageName) ? imageName : undefined,
-    );
+  on(IPC.ADD_TO_GROUP, (groupId, historyEntryId) => {
+    const entry = history.find(requireId(historyEntryId));
+    if (!entry) return null;
+    return groups.addEntry(requireId(groupId), entry.content, entry.type, entry.preview, entry.imageName);
   });
   on(IPC.REMOVE_FROM_GROUP, (groupId, entryId) => groups.removeEntry(requireId(groupId), requireId(entryId)));
 
   // Tooltip
-  on(IPC.SHOW_TOOLTIP, async (text) => {
+  on(IPC.SHOW_TOOLTIP, async (payload) => {
     if (!popup.isVisible()) return; // Never show a tooltip while the popup is hiding.
-    await tooltip.show(requireString(text));
+    const target = parseTooltipTarget(payload);
+    const entry =
+      target.kind === 'history' ? history.find(target.id) : groups.findEntry(target.groupId, target.entryId);
+    if (!entry || entry.type === 'image') return;
+    await tooltip.show(truncateForTooltip(entry.content));
   });
   on(IPC.HIDE_TOOLTIP, () => tooltip.hide());
 
@@ -162,7 +157,7 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
     if (canceled || !filePath) return { success: false };
-    await fs.writeFile(filePath, JSON.stringify(history.list(), null, 2), 'utf-8');
+    await fs.writeFile(filePath, JSON.stringify(history.all(), null, 2), 'utf-8');
     return { success: true };
   });
   on(IPC.IMPORT_HISTORY, async () => {

@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ArrowLeft, Trash2, Folder, Plus, Trash, X } from 'lucide-react';
-import type { ClipboardGroup, GroupEntry } from '../../shared/types';
+import type { ClipboardGroupSummary, GroupEntrySummary } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
 import { ImagePreview } from './ImagePreview';
 
 export const GroupsView: React.FC = () => {
   const { translate } = useLocalization();
-  const [groups, setGroups] = useState<ClipboardGroup[]>([]);
-  const [activeGroup, setActiveGroup] = useState<ClipboardGroup | null>(null);
+  const [groups, setGroups] = useState<ClipboardGroupSummary[]>([]);
+  const [activeGroup, setActiveGroup] = useState<ClipboardGroupSummary | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -53,12 +53,8 @@ export const GroupsView: React.FC = () => {
     load();
   };
 
-  const handlePaste = (entry: GroupEntry) => {
-    if (entry.type === 'image' && entry.imageName) {
-      window.clipstack.pasteImage(entry.imageName);
-    } else {
-      window.clipstack.pasteGroupEntry(entry.content);
-    }
+  const handlePaste = (groupId: number, entry: GroupEntrySummary) => {
+    window.clipstack.pasteGroupEntry(groupId, entry.id);
   };
 
   const handleRemoveEntry = async (groupId: number, entryId: number) => {
@@ -117,11 +113,12 @@ export const GroupsView: React.FC = () => {
           </div>
         ) : (
           <div className="clipboard-list">
-            {activeGroup.entries.map((entry: GroupEntry) => (
+            {activeGroup.entries.map((entry: GroupEntrySummary) => (
               <GroupEntryItem
                 key={entry.id}
                 entry={entry}
-                onPaste={() => handlePaste(entry)}
+                groupId={activeGroup.id}
+                onPaste={() => handlePaste(activeGroup.id, entry)}
                 onRemove={() => handleRemoveEntry(activeGroup.id, entry.id)}
               />
             ))}
@@ -190,10 +187,11 @@ export const GroupsView: React.FC = () => {
 };
 
 const GroupEntryItem: React.FC<{
-  entry: GroupEntry;
-  onPaste: (entry: GroupEntry) => void;
+  entry: GroupEntrySummary;
+  groupId: number;
+  onPaste: (entry: GroupEntrySummary) => void;
   onRemove: () => void;
-}> = ({ entry, onPaste, onRemove }) => {
+}> = ({ entry, groupId, onPaste, onRemove }) => {
   const { translate } = useLocalization();
   const [hovered, setHovered] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -216,7 +214,7 @@ const GroupEntryItem: React.FC<{
     if (!isTruncated() || overButtonsRef.current) return;
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
     tooltipTimer.current = setTimeout(() => {
-      window.clipstack.showTooltip(entry.content);
+      window.clipstack.showTooltip({ kind: 'group', groupId, entryId: entry.id });
     }, 500);
   };
 
