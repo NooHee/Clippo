@@ -1,6 +1,6 @@
 // Measures the main-process cost of the history hot paths on a realistic, "heavy" history:
-// what one popup open sends over IPC, what one search keystroke costs, how long image rows
-// block the main thread, and what one save serializes.
+// what one popup open sends over IPC, what one search keystroke costs, and how long image rows
+// block the main thread.
 //
 // It needs no Electron runtime: the repositories are plain TypeScript, and v8.serialize is the
 // same structured clone algorithm Electron uses to copy IPC payloads between processes.
@@ -9,6 +9,7 @@
 //   node scripts/perf/history-bench.js dist/main/main
 // To compare with another version, build it in another checkout and pass its dist folder too:
 //   node scripts/perf/history-bench.js /path/to/old/dist/main/main dist/main/main
+// (If the other checkout has no node_modules, prefix the command with NODE_PATH=$PWD/node_modules.)
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -49,7 +50,7 @@ function buildHistory(dist) {
     else content = `${i} ${text(200, i)}`;
     history.insert(content, 'text');
   }
-  return { history, store };
+  return history;
 }
 
 function median(samples) {
@@ -102,13 +103,11 @@ function payloadOf(entries) {
 }
 
 async function bench(dist) {
-  const { history, store } = buildHistory(dist);
+  const history = buildHistory(dist);
   const rows = history.list('');
   const payload = payloadOf(rows);
   const cloneMs = measure(() => v8.deserialize(payloadOf(history.list(''))));
   const searchMs = KEYSTROKES.reduce((sum, query) => sum + measure(() => history.list(query)), 0) / KEYSTROKES.length;
-  const saveMs = measure(() => JSON.stringify(store.get()), 5);
-  const savedBytes = JSON.stringify(store.get()).length;
   const thumbs = await measureThumbnails(dist);
   return {
     'popup open: rows sent': rows.length,
@@ -117,8 +116,6 @@ async function bench(dist) {
     'search keystroke (ms, median)': searchMs.toFixed(2),
     [`${THUMBNAILS} image rows: main thread blocked (ms)`]: thumbs.blockingMs.toFixed(2),
     [`${THUMBNAILS} image rows: bytes over IPC (KB)`]: Math.round(thumbs.ipcBytes / 1024),
-    'save: JSON.stringify of history (ms)': saveMs.toFixed(1),
-    'save: serialized size (MB)': (savedBytes / 1_000_000).toFixed(1),
   };
 }
 
