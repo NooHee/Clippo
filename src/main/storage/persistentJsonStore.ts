@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { perfMark } from '../platform/perf';
 
 /**
  * Turns the serialized JSON into the bytes written on disk and back.
@@ -111,8 +112,12 @@ export class PersistentJsonStore<T> implements DocumentStore<T> {
     }
   }
 
+  /** Synchronous, on the main thread: its cost is bounded by the history entry size limit. */
   private serialize(value: T): string {
-    return this.options.codec.encode(JSON.stringify(value));
+    const done = perfMark(`store.serialize ${path.basename(this.options.filePath)}`);
+    const payload = this.options.codec.encode(JSON.stringify(value));
+    done();
+    return payload;
   }
 
   private async writeAtomically(payload: string): Promise<void> {

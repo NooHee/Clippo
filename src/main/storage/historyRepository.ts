@@ -1,4 +1,4 @@
-import type { ClipboardEntry, ClipboardEntryType } from '../../shared/types';
+import type { ClipboardEntry, ClipboardEntrySummary, ClipboardEntryType } from '../../shared/types';
 import type { DocumentStore } from './persistentJsonStore';
 import { isFiniteNumber, isRecord, isString } from './guards';
 
@@ -9,6 +9,9 @@ export interface HistoryData {
 
 /** The renderer never needs more than this many rows at once. */
 export const MAX_RESULTS = 200;
+/** Search looks at this many leading characters of each entry, so a keystroke costs the same whatever was copied. */
+export const SEARCH_TEXT_LENGTH = 20_000;
+const PREVIEW_LENGTH = 200;
 const ENTRY_TYPES: readonly ClipboardEntryType[] = ['text', 'image', 'file'];
 
 export function isEntryType(value: unknown): value is ClipboardEntryType {
@@ -45,8 +48,13 @@ export function createEmptyHistory(): HistoryData {
 
 export function buildPreview(content: string, type: ClipboardEntryType): string {
   if (type === 'image') return '[Image]';
-  if (type === 'file') return content.split('\n')[0] ?? content;
-  return content.slice(0, 200).replace(/\s+/g, ' ').trim();
+  if (type === 'file') return (content.split('\n', 1)[0] ?? content).slice(0, PREVIEW_LENGTH);
+  return content.slice(0, PREVIEW_LENGTH).replace(/\s+/g, ' ').trim();
+}
+
+export function toSummary(entry: ClipboardEntry): ClipboardEntrySummary {
+  const { id, type, preview, createdAt, pinnedAt, imageName } = entry;
+  return { id, type, preview, createdAt, pinnedAt, ...(imageName && { imageName }) };
 }
 
 export interface HistoryRepositoryOptions {
@@ -63,6 +71,12 @@ export interface HistoryRepositoryOptions {
  */
 export class HistoryRepository {
   private readonly now: () => number;
+  /**
+   * Lowercased, length capped text used by search, computed once per entry instead of on every
+   * keystroke. Keyed by the entry object, so replacing or removing an entry drops its cache line
+   * automatically and nothing extra is written to disk.
+   */
+  private readonly searchText = new WeakMap<ClipboardEntry, string>();
 
   constructor(
     private readonly store: DocumentStore<HistoryData>,
@@ -106,19 +120,25 @@ export class HistoryRepository {
   }
 
   /** Pinned entries first (most recently pinned on top), then the rest by recency. */
-  list(query = ''): ClipboardEntry[] {
+  list(query = ''): ClipboardEntrySummary[] {
     const needle = query.trim().toLowerCase();
-    const matches = needle
-      ? this.store.get().entries.filter(
-          (entry) => entry.content.toLowerCase().includes(needle) || entry.preview.toLowerCase().includes(needle),
-        )
-      : this.store.get().entries;
+    const entries = this.store.get().entries;
+    const matches = needle ? entries.filter((entry) => this.searchTextOf(entry).includes(needle)) : entries;
 
     const pinned = matches
       .filter((entry) => entry.pinnedAt !== null)
       .sort((a, b) => (b.pinnedAt ?? 0) - (a.pinnedAt ?? 0));
     const unpinned = matches.filter((entry) => entry.pinnedAt === null);
-    return [...pinned, ...unpinned].slice(0, MAX_RESULTS);
+    return [...pinned, ...unpinned].slice(0, MAX_RESULTS).map(toSummary);
+  }
+
+  /** Every entry with its full content, newest first. Only for export. */
+  all(): ClipboardEntry[] {
+    return [...this.store.get().entries];
+  }
+
+  find(id: number): ClipboardEntry | undefined {
+    return this.store.get().entries.find((entry) => entry.id === id);
   }
 
   contains(content: string): boolean {
@@ -134,11 +154,13 @@ export class HistoryRepository {
     this.store.scheduleSave();
   }
 
-  togglePin(id: number): void {
-    const entry = this.store.get().entries.find((candidate) => candidate.id === id);
-    if (!entry) return;
+  /** Returns the updated row so the popup can move it locally instead of reloading the list. */
+  togglePin(id: number): ClipboardEntrySummary | null {
+    const entry = this.find(id);
+    if (!entry) return null;
     entry.pinnedAt = entry.pinnedAt === null ? this.now() : null;
     this.store.scheduleSave();
+    return toSummary(entry);
   }
 
   /** Removes everything except pinned entries. */
@@ -162,6 +184,15 @@ export class HistoryRepository {
       data.entries.unshift(entry);
     }
     this.store.scheduleSave();
+  }
+
+  private searchTextOf(entry: ClipboardEntry): string {
+    let text = this.searchText.get(entry);
+    if (text === undefined) {
+      text = `${entry.preview}\n${entry.content.slice(0, SEARCH_TEXT_LENGTH)}`.toLowerCase();
+      this.searchText.set(entry, text);
+    }
+    return text;
   }
 
   private prune(data: HistoryData): void {

@@ -4,14 +4,28 @@ import { nativeImage, type NativeImage } from 'electron';
 
 /**
  * Thumbnails are shown at about 350x140 CSS pixels, so 640px wide covers Retina screens.
- * The previous implementation "generated" thumbnails by copying the full-size file and then
- * sent it base64-encoded over IPC every time a row mounted, which made opening the popup
- * slow as soon as the history contained a few screenshots.
+ * They reach the renderer through the `clippo-image://` protocol (see imageProtocol.ts): the
+ * popup uses a plain <img src>, and Chromium reads, decodes and caches the file. Earlier
+ * versions read each thumbnail synchronously on the main thread and sent it base64 encoded
+ * over IPC every time a row mounted.
  */
 const THUMBNAIL_WIDTH = 640;
 /** Versioned prefix so thumbnails written by older builds (full-size copies) are regenerated once. */
 const THUMBNAIL_PREFIX = 'thumb_v2_';
 const SAFE_IMAGE_NAME = /^[\w.-]+\.png$/;
+
+export function isSafeImageName(imageName: string): boolean {
+  return SAFE_IMAGE_NAME.test(imageName);
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.promises.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export class ImageStore {
   private readonly thumbnailsDir: string;
@@ -29,21 +43,24 @@ export class ImageStore {
     return imageName;
   }
 
-  /** Returns a small data URL for the renderer, generating the thumbnail on demand if needed. */
-  thumbnailDataUrl(imageName: string): string | null {
-    if (!SAFE_IMAGE_NAME.test(imageName)) return null;
+  /**
+   * Absolute path of the thumbnail, generating it first if an older build never wrote one.
+   * Resolves to null for unknown or unsafe names, so a crafted URL can never escape the folder.
+   */
+  async thumbnailFile(imageName: string): Promise<string | null> {
+    if (!isSafeImageName(imageName)) return null;
     const thumbPath = this.thumbnailPath(imageName);
-    if (!fs.existsSync(thumbPath)) {
-      const original = this.read(imageName);
-      if (!original) return null;
-      fs.mkdirSync(this.thumbnailsDir, { recursive: true });
-      this.writeThumbnail(imageName, original);
-    }
-    return `data:image/png;base64,${fs.readFileSync(thumbPath).toString('base64')}`;
+    if (await fileExists(thumbPath)) return thumbPath;
+
+    const original = this.read(imageName);
+    if (!original) return null;
+    await fs.promises.mkdir(this.thumbnailsDir, { recursive: true });
+    this.writeThumbnail(imageName, original);
+    return thumbPath;
   }
 
   read(imageName: string): NativeImage | null {
-    if (!SAFE_IMAGE_NAME.test(imageName)) return null;
+    if (!isSafeImageName(imageName)) return null;
     const imagePath = this.imagePath(imageName);
     if (!fs.existsSync(imagePath)) return null;
     const image = nativeImage.createFromPath(imagePath);
@@ -51,7 +68,7 @@ export class ImageStore {
   }
 
   delete(imageName: string): void {
-    if (!SAFE_IMAGE_NAME.test(imageName)) return;
+    if (!isSafeImageName(imageName)) return;
     for (const file of [
       this.imagePath(imageName),
       this.thumbnailPath(imageName),

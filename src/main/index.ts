@@ -3,11 +3,13 @@ import { app, clipboard, globalShortcut, Menu, nativeImage, session, systemPrefe
 import { DEFAULT_SETTINGS, IPC, type AccessibilityState, type Settings } from '../shared/types';
 import { createStorageCodec } from './encrypting';
 import { PersistentJsonStore } from './storage/persistentJsonStore';
-import { createEmptyHistory, HistoryRepository, parseHistoryData } from './storage/historyRepository';
+import { createEmptyHistory, HistoryRepository, parseHistoryData, toSummary } from './storage/historyRepository';
 import { parseSettings, SettingsRepository } from './storage/settingsRepository';
 import { createEmptyGroups, GroupRepository, parseGroupData } from './storage/groupRepository';
 import { ClipboardWatcher } from './clipboard/clipboardWatcher';
 import { ImageStore } from './clipboard/imageStore';
+import { handleImageProtocol, registerImageSchemePrivileges } from './clipboard/imageProtocol';
+import { MacPasteboardChangeSource } from './clipboard/clipboardChangeSource';
 import { PopupWindow } from './windows/popupWindow';
 import { TooltipWindow } from './windows/tooltipWindow';
 import { ElectronAppActivation } from './paste/appActivation';
@@ -81,6 +83,7 @@ function bootstrap(): void {
 
   // 2. Load stored data now (disk read + Keychain decryption) instead of on the first open.
   const images = new ImageStore(path.join(userData, 'images'));
+  handleImageProtocol(images);
   const historyStore = new PersistentJsonStore({
     filePath: path.join(userData, 'clippo-history.json'),
     createDefault: createEmptyHistory,
@@ -112,7 +115,9 @@ function bootstrap(): void {
     },
     ignoredApps: () => settings.get().ignoredApps,
     frontmostAppName,
-    onNewEntry: (entry) => popup.browserWindow.webContents.send(IPC.CLIPBOARD_UPDATED, entry),
+    onNewEntry: (entry) => popup.browserWindow.webContents.send(IPC.CLIPBOARD_UPDATED, toSummary(entry)),
+    // macOS: react to the pasteboard change counter instead of reading the clipboard every tick.
+    changeSource: isMac ? new MacPasteboardChangeSource() : undefined,
   });
 
   const paste = new PasteService({
@@ -134,7 +139,6 @@ function bootstrap(): void {
     history,
     settings,
     groups,
-    images,
     paste,
     accessibility,
     writeText: (text) => {
@@ -245,6 +249,9 @@ function tryRegister(accelerator: string, handler: () => void): boolean {
     return false;
   }
 }
+
+// Custom schemes must be declared before the app is ready.
+registerImageSchemePrivileges();
 
 // A second launch (for example from Finder) focuses the running instance instead of starting a
 // new one with its own tray icon and clipboard watcher.

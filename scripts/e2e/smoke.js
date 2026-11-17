@@ -5,7 +5,7 @@
 // Run with `npm run test:e2e` (Linux CI: `xvfb-run -a npm run test:e2e`).
 // Intended for Linux/CI. On macOS the paste step would also send a real Cmd+V to whatever app is
 // frontmost, so prefer the manual checklist in docs/performance-and-auto-paste.md there.
-const { app, clipboard, BrowserWindow, ipcMain, nativeImage } = require('electron');
+const { app, clipboard, BrowserWindow, ipcMain, nativeImage, net } = require('electron');
 if (!app.dock) app.dock = { setIcon() {}, hide() {}, show() {} };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
@@ -35,6 +35,8 @@ app.whenReady().then(async () => {
     const current = await previews();
     return current[0] === 'second copied text' ? current : null;
   }) ?? (await previews());
+  const rows = await js(`window.clipstack.getHistory('')`);
+  check('history rows sent to the renderer carry previews, not full content', rows.length === 2 && rows.every((r) => !('content' in r) && typeof r.preview === 'string'), JSON.stringify(rows[0]));
   check('new copies appear live in the list, newest first', items[0] === 'second copied text' && items[1] === 'first copied text', JSON.stringify(items));
 
   // Type a search query through React's input
@@ -64,10 +66,23 @@ app.whenReady().then(async () => {
   const pixels = Buffer.alloc(2880 * 1800 * 4, 120);
   clipboard.writeImage(nativeImage.createFromBitmap(pixels, { width: 2880, height: 1800 }));
   await sleep(1500);
+  const thumbSrc = await js(`document.querySelector('.item-image')?.src ?? null`);
+  check('thumbnails load through the clippo-image protocol, not base64 over IPC', typeof thumbSrc === 'string' && thumbSrc.startsWith('clippo-image://thumbnail/'), JSON.stringify(thumbSrc));
   const thumb = await js(`new Promise((resolve) => { const f = () => { const img = document.querySelector('.item-image'); if (img && img.complete && img.naturalWidth) resolve({ w: img.naturalWidth, bytes: img.src.length }); else setTimeout(f, 20); }; f(); setTimeout(() => resolve(null), 3000); })`);
   check('copied image shows up with a downscaled thumbnail (<= 640 px wide)', thumb !== null && thumb.w <= 640, JSON.stringify(thumb));
   const imageRows = await js(`document.querySelectorAll('.item-image').length`);
   check('the unchanged image is recorded only once across poll ticks', imageRows === 1, `(${imageRows} rows)`);
+  const status = (url) => net.fetch(url).then((r) => r.status, (e) => String(e));
+  const served = await status(thumbSrc);
+  const traversal = await status('clippo-image://thumbnail/..%2F..%2Fclippo-history.json');
+  check('the image protocol serves thumbnails and refuses names outside their folder', served === 200 && traversal === 404, `(${served}, ${traversal})`);
+
+  // Pinning moves the row locally (no list reload) and matches the order main returns.
+  const lastRowId = await js(`window.clipstack.getHistory('').then((r) => r[r.length - 1].id)`);
+  await js(`window.clipstack.pinEntry(${lastRowId})`);
+  const mainOrder = await js(`window.clipstack.getHistory('').then((r) => r.map((e) => e.id))`);
+  check('pinning returns the row and main lists it first', mainOrder[0] === lastRowId, JSON.stringify(mainOrder));
+  await js(`window.clipstack.pinEntry(${lastRowId})`);
 
   // Accessibility warning: off macOS the state is "unsupported", so no banner. Main pushes state
   // changes over IPC; simulate a revoked and then restored permission and check the banner follows.

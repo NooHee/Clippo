@@ -10,7 +10,7 @@ import { AccessibilityBanner } from './components/AccessibilityBanner';
 import { useClipboardHistory } from './hooks/useClipboardHistory';
 import { useAccessibilityState } from './hooks/useAccessibilityState';
 import { Settings, X } from 'lucide-react';
-import type { ClipboardEntry } from '../shared/types';
+import type { ClipboardEntrySummary } from '../shared/types';
 import './styles.css';
 
 type Tab = 'history' | 'groups';
@@ -20,7 +20,7 @@ const App: React.FC = () => {
   const { entries, query, setQuery, resetForNextOpen, paste, remove, pin, clearAll, loading } = useClipboardHistory();
   const [tab, setTab] = useState<Tab>('history');
   const [showSettings, setShowSettings] = useState(false);
-  const [pickerEntry, setPickerEntry] = useState<ClipboardEntry | null>(null);
+  const [pickerEntry, setPickerEntry] = useState<ClipboardEntrySummary | null>(null);
   const accessibility = useAccessibilityState();
 
   // One settings round trip on mount (and after the settings panel closes) instead of one per concern.

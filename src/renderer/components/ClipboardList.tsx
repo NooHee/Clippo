@@ -1,15 +1,15 @@
 import React from 'react';
-import type { ClipboardEntry } from '../../shared/types';
+import type { ClipboardEntrySummary } from '../../shared/types';
 import { ClipboardItem } from './ClipboardItem';
 import { useLocalization } from '../../i18n/useLocalization';
 
 interface ClipboardListProps {
-  entries: ClipboardEntry[];
+  entries: ClipboardEntrySummary[];
   loading: boolean;
-  onPaste: (entry: ClipboardEntry) => void;
+  onPaste: (entry: ClipboardEntrySummary) => void;
   onDelete: (id: number) => void;
   onPin: (id: number) => void;
-  onAddToGroup: (entry: ClipboardEntry) => void;
+  onAddToGroup: (entry: ClipboardEntrySummary) => void;
 }
 
 export const ClipboardList: React.FC<ClipboardListProps> = ({
