@@ -218,15 +218,32 @@ function subscribeToAccessibilityChanges(listener: () => void): Cancel {
  * The hotkey handler only toggles the window. It used to run a synchronous `osascript` first to
  * capture the frontmost app name, blocking the main thread before the popup could appear.
  * Focus restoration no longer needs that name (see PasteService).
+ *
+ * The stored hotkey comes from a file the user can edit or import. Electron throws on a string it
+ * cannot parse, and at startup that throw would stop everything after it (including the clipboard
+ * watcher), so an unusable hotkey falls back to the default instead.
  */
 function registerHotkey(hotkey: string, onToggle: () => void): void {
   globalShortcut.unregisterAll();
-  const registered = globalShortcut.register(hotkey, () => {
+  const handler = (): void => {
     const done = perfMark('hotkey.toggle');
     onToggle();
     done();
-  });
-  if (!registered) console.warn(`[Clippo] Could not register the global shortcut "${hotkey}".`);
+  };
+  if (tryRegister(hotkey, handler) || hotkey === DEFAULT_SETTINGS.hotkey) return;
+  console.warn(`[Clippo] Could not register the global shortcut "${hotkey}", using the default.`);
+  tryRegister(DEFAULT_SETTINGS.hotkey, handler);
+}
+
+function tryRegister(accelerator: string, handler: () => void): boolean {
+  try {
+    if (globalShortcut.register(accelerator, handler)) return true;
+    console.warn(`[Clippo] The global shortcut "${accelerator}" is already taken.`);
+    return false;
+  } catch (error) {
+    console.warn(`[Clippo] "${accelerator}" is not a valid shortcut.`, error);
+    return false;
+  }
 }
 
 // A second launch (for example from Finder) focuses the running instance instead of starting a
