@@ -10,6 +10,7 @@ how they were verified:
    confirm the switch, and only then sends Cmd+V.
 
 It is written so it can be read on its own, for example to prepare a technical interview.
+The follow-up pass is in [lean-ipc-and-change-detection.md](lean-ipc-and-change-detection.md).
 
 ---
 
@@ -420,8 +421,9 @@ Keystroke synthesis and focus handback need a real macOS session with Accessibil
 
 ## Future work
 
-1. Native addon for `NSPasteboard.changeCount` (idle poll becomes free) and `CGEventPost` (faster
-   paste, one fewer permission).
+1. Watching `NSPasteboard.changeCount` instead of reading the clipboard each tick: done, see
+   [Lean IPC, thumbnails by URL, and change based clipboard detection](lean-ipc-and-change-detection.md),
+   which also sends previews instead of full entries over IPC and serves thumbnails by URL.
 2. Upgrade Electron (28 is out of support) and evaluate `type: 'panel'`.
 3. Bundle the preload with Vite so IPC channel names have a single source of truth.
 4. Virtualize the list if the visible cap ever grows beyond a few hundred rows.

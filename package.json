@@ -13,7 +13,9 @@
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.json && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:e2e": "npm run build && node scripts/e2e/run.js",
-    "bench:startup": "npm run build && scripts/perf/bench-startup.sh 7"
+    "bench:startup": "npm run build && scripts/perf/bench-startup.sh 7",
+    "bench:history": "npm run build && node scripts/perf/history-bench.js dist/main/main",
+    "bench:ipc": "npm run build && node scripts/perf/ipc-bench.js ."
   },
   "devDependencies": {
     "@electron/fuses": "^2.1.3",
