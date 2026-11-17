@@ -1,3 +1,4 @@
+import { MAX_TEXT_LENGTH } from '../../shared/types';
 import type { HistoryRepository } from './historyRepository';
 import { isEntryType } from './historyRepository';
 import { isRecord, isString } from './guards';
@@ -24,6 +25,10 @@ export function importHistory(history: Pick<HistoryRepository, 'contains' | 'ins
     const { content, type } = item;
     if (!isString(content) || !content || !isEntryType(type)) {
       result.errors.push(`Item ${index}: missing or invalid fields`);
+      return;
+    }
+    if (content.length > MAX_TEXT_LENGTH) {
+      result.errors.push(`Item ${index}: too large`);
       return;
     }
     if (history.contains(content)) {

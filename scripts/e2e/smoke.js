@@ -84,6 +84,19 @@ app.whenReady().then(async () => {
   await sleep(150);
   check('Accessibility banner clears by itself once the permission is back', (await bannerText()) === null);
 
+  // Security: the popup must never leave the bundled page, because the preload would expose the
+  // API to whatever page it navigated to (for example a file dropped onto the window).
+  const appUrl = win.webContents.getURL();
+  await js(`location.href = 'file:///etc/hosts'`).catch(() => undefined);
+  await sleep(300);
+  check('the popup cannot navigate away from the bundled page', win.webContents.getURL() === appUrl, win.webContents.getURL());
+  const opened = await js(`window.open('https://example.com') === null`);
+  check('the popup cannot open new windows', opened && BrowserWindow.getAllWindows().length <= 2);
+  // Password managers mark secrets with this pasteboard type; the watcher relies on Electron's
+  // clipboard.has() to see it.
+  clipboard.writeBuffer('org.nspasteboard.ConcealedType', Buffer.from('1'));
+  check('Electron reports the concealed pasteboard marker', clipboard.has('org.nspasteboard.ConcealedType'));
+
   await js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
   const t1 = Date.now(); while (win.isVisible() && Date.now() - t1 < 2000) await sleep(2);
   check('Escape dismisses the popup', !win.isVisible());

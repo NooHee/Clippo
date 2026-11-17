@@ -1,7 +1,9 @@
 import { once } from 'node:events';
+import { pathToFileURL } from 'node:url';
 import { app, BrowserWindow, ipcMain, screen, type Rectangle } from 'electron';
 import { IPC } from '../../shared/types';
 import { perfMark } from '../platform/perf';
+import { lockNavigation } from '../security/webContentsGuard';
 
 /** How long we wait for the renderer to confirm it has painted its reset state before hiding. */
 const RESET_ACK_TIMEOUT_MS = 150;
@@ -29,6 +31,8 @@ export interface PopupWindowOptions {
  */
 export class PopupWindow {
   private readonly window: BrowserWindow;
+  /** The only page this window may show; IPC handlers reject calls from any other page. */
+  readonly appUrl: string;
   private hiding: Promise<void> | null = null;
 
   constructor(private readonly options: PopupWindowOptions) {
@@ -59,12 +63,10 @@ export class PopupWindow {
       },
     });
 
-    if (options.devServerUrl) {
-      void this.window.loadURL(options.devServerUrl);
-      this.window.webContents.openDevTools({ mode: 'detach' });
-    } else {
-      void this.window.loadFile(options.indexHtmlPath);
-    }
+    lockNavigation(this.window.webContents);
+    this.appUrl = options.devServerUrl ?? pathToFileURL(options.indexHtmlPath).href;
+    void this.window.loadURL(this.appUrl);
+    if (options.devServerUrl) this.window.webContents.openDevTools({ mode: 'detach' });
 
     this.window.on('blur', () => this.handleBlur());
     this.window.on('hide', () => options.onHide?.());

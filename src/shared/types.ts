@@ -22,6 +22,8 @@ export interface Settings {
   ignoredApps: string[];
   language: 'en' | 'fr';
   onboardingCompleted?: boolean;
+  /** Set once the default password apps were added to `ignoredApps`, so removing one sticks. */
+  passwordAppsAdded?: boolean;
 }
 
 export interface PermissionStatus {
@@ -38,6 +40,36 @@ export interface PermissionStatus {
  */
 export type AccessibilityState = 'granted' | 'missing' | 'unsupported';
 
+/**
+ * Apps whose copies are never recorded, added to the ignored apps list by default. Users can remove
+ * any of them in Settings. Most of these also mark passwords as concealed, which Clippo honours
+ * too; this list covers versions and apps that do not.
+ */
+export const PASSWORD_APPS: readonly string[] = [
+  '1Password',
+  '1Password 7',
+  'Bitwarden',
+  'Dashlane',
+  'Enpass',
+  'KeePassXC',
+  'Keychain Access',
+  'LastPass',
+  'Passwords',
+  'Proton Pass',
+];
+
+/**
+ * Text above this size is still on the clipboard (the user can paste it normally) but is not
+ * saved in history. One million characters is roughly a 500 page book; only things like whole
+ * log files exceed it, and keeping those would slow down every save, search and popup open.
+ */
+export const MAX_TEXT_LENGTH = 1_000_000;
+
+export const SETTINGS_LIMITS = {
+  maxHistory: { min: 1, max: 5000 },
+  pollIntervalMs: { min: 100, max: 5000 },
+} as const;
+
 export const DEFAULT_SETTINGS: Settings = {
   hotkey: 'Command+Shift+V',
   maxHistory: 500,
@@ -46,8 +78,9 @@ export const DEFAULT_SETTINGS: Settings = {
   popupPosition: 'tray',
   dismissOnBlur: true,
   theme: 'system',
-  ignoredApps: [],
+  ignoredApps: [...PASSWORD_APPS],
   language: 'en',
+  passwordAppsAdded: true,
 };
 
 export interface GroupEntry {

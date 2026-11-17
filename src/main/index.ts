@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { app, clipboard, globalShortcut, Menu, nativeImage, systemPreferences, Tray } from 'electron';
+import { app, clipboard, globalShortcut, Menu, nativeImage, session, systemPreferences, Tray } from 'electron';
 import { DEFAULT_SETTINGS, IPC, type AccessibilityState, type Settings } from '../shared/types';
 import { createStorageCodec } from './encrypting';
 import { PersistentJsonStore } from './storage/persistentJsonStore';
@@ -18,8 +18,11 @@ import { describeTray, type TrayActions } from './tray/trayMenu';
 import { frontmostAppName, openAccessibilitySettings, sendPasteKeystroke } from './platform/macos';
 import { perfMark, perfSinceStart } from './platform/perf';
 import { registerIpcHandlers } from './ipc';
+import { denyWebPermissions } from './security/webContentsGuard';
 
-const isDev = process.env.NODE_ENV === 'development';
+// `app.isPackaged` cannot be changed from outside, so a packaged build can never be switched to the
+// dev server (and DevTools) by setting NODE_ENV.
+const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
 const FOCUS_SETTLE_MS = 50;
 /** Distributed notification macOS posts when an app is added, removed or toggled in Accessibility. */
@@ -38,6 +41,7 @@ function assetPath(fileName: string): string {
 function bootstrap(): void {
   perfSinceStart('app.ready');
   if (isMac) app.dock?.hide(); // Packaged builds are LSUIElement already; this covers `npm start`.
+  denyWebPermissions(session.defaultSession);
 
   const activation = new ElectronAppActivation(app);
   const userData = app.getPath('userData');
@@ -214,15 +218,32 @@ function subscribeToAccessibilityChanges(listener: () => void): Cancel {
  * The hotkey handler only toggles the window. It used to run a synchronous `osascript` first to
  * capture the frontmost app name, blocking the main thread before the popup could appear.
  * Focus restoration no longer needs that name (see PasteService).
+ *
+ * The stored hotkey comes from a file the user can edit or import. Electron throws on a string it
+ * cannot parse, and at startup that throw would stop everything after it (including the clipboard
+ * watcher), so an unusable hotkey falls back to the default instead.
  */
 function registerHotkey(hotkey: string, onToggle: () => void): void {
   globalShortcut.unregisterAll();
-  const registered = globalShortcut.register(hotkey, () => {
+  const handler = (): void => {
     const done = perfMark('hotkey.toggle');
     onToggle();
     done();
-  });
-  if (!registered) console.warn(`[Clippo] Could not register the global shortcut "${hotkey}".`);
+  };
+  if (tryRegister(hotkey, handler) || hotkey === DEFAULT_SETTINGS.hotkey) return;
+  console.warn(`[Clippo] Could not register the global shortcut "${hotkey}", using the default.`);
+  tryRegister(DEFAULT_SETTINGS.hotkey, handler);
+}
+
+function tryRegister(accelerator: string, handler: () => void): boolean {
+  try {
+    if (globalShortcut.register(accelerator, handler)) return true;
+    console.warn(`[Clippo] The global shortcut "${accelerator}" is already taken.`);
+    return false;
+  } catch (error) {
+    console.warn(`[Clippo] "${accelerator}" is not a valid shortcut.`, error);
+    return false;
+  }
 }
 
 // A second launch (for example from Finder) focuses the running instance instead of starting a

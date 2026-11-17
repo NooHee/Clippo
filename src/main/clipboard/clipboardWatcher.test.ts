@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { ClipboardEntry, ClipboardEntryType } from '../../shared/types';
-import { ClipboardWatcher, type WatchedClipboard } from './clipboardWatcher';
+import { MAX_TEXT_LENGTH } from '../../shared/types';
+import { ClipboardWatcher, SENSITIVE_CLIPBOARD_TYPES, type WatchedClipboard } from './clipboardWatcher';
 
 /** A clipboard the test can change at will. Tests call `checkNow()` directly: no timers. */
 class FakeClipboard implements WatchedClipboard {
   text = '';
   png: Buffer | null = null;
+  markers = new Set<string>();
+
+  has(format: string): boolean {
+    return this.markers.has(format);
+  }
 
   availableFormats(): string[] {
     return this.png ? ['image/png'] : ['text/plain'];
@@ -101,5 +107,78 @@ describe('ClipboardWatcher', () => {
     await watcher.checkNow();
 
     expect(emitted).toHaveLength(1);
+  });
+
+  describe('sensitive content', () => {
+    it.each(SENSITIVE_CLIPBOARD_TYPES)('does not record text marked with %s', async (marker) => {
+      const { clipboard, emitted, watcher } = setup();
+      clipboard.text = 'hunter2';
+      clipboard.markers.add(marker);
+      await watcher.checkNow();
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('does not record a concealed image', async () => {
+      const { clipboard, emitted, watcher } = setup();
+      clipboard.png = Buffer.from('secret QR code');
+      clipboard.markers.add('org.nspasteboard.ConcealedType');
+      await watcher.checkNow();
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('does not record the secret later if the marker goes away but the content stays', async () => {
+      const { clipboard, emitted, watcher } = setup();
+      clipboard.text = 'hunter2';
+      clipboard.markers.add('org.nspasteboard.ConcealedType');
+      await watcher.checkNow();
+      clipboard.markers.clear();
+      await watcher.checkNow();
+
+      expect(emitted).toEqual([]);
+    });
+
+    it('records normally again once the user copies something else', async () => {
+      const { clipboard, emitted, watcher } = setup();
+      clipboard.text = 'hunter2';
+      clipboard.markers.add('org.nspasteboard.ConcealedType');
+      await watcher.checkNow();
+      clipboard.markers.clear();
+      clipboard.text = 'meeting notes';
+      await watcher.checkNow();
+
+      expect(emitted.map((entry) => entry.content)).toEqual(['meeting notes']);
+    });
+
+    it('treats a clipboard that cannot be queried as not sensitive', async () => {
+      const { clipboard, emitted, watcher } = setup();
+      clipboard.has = () => {
+        throw new Error('unsupported format');
+      };
+      clipboard.text = 'hello';
+      await watcher.checkNow();
+
+      expect(emitted.map((entry) => entry.content)).toEqual(['hello']);
+    });
+  });
+
+  describe('size limit', () => {
+    it('records text up to the limit', async () => {
+      const { clipboard, emitted, watcher } = setup();
+      clipboard.text = 'a'.repeat(MAX_TEXT_LENGTH);
+      await watcher.checkNow();
+
+      expect(emitted).toHaveLength(1);
+    });
+
+    it('skips text above the limit without recording it on later ticks', async () => {
+      const { clipboard, emitted, watcher } = setup();
+      clipboard.text = 'a'.repeat(MAX_TEXT_LENGTH + 1);
+      await watcher.checkNow();
+      await watcher.checkNow();
+
+      expect(emitted).toEqual([]);
+    });
   });
 });

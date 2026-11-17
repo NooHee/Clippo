@@ -1,4 +1,5 @@
 import { BrowserWindow, screen } from 'electron';
+import { lockNavigation } from '../security/webContentsGuard';
 
 const TOOLTIP_WIDTH = 420;
 const TOOLTIP_MAX_HEIGHT = 460;
@@ -63,6 +64,7 @@ export class TooltipWindow {
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
     });
     window.setIgnoreMouseEvents(true);
+    lockNavigation(window.webContents);
     this.ready = window.loadFile(this.htmlPath);
     this.window = window;
     return window;
