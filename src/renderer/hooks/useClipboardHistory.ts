@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { ClipboardEntry } from '../../shared/types';
+import type { ClipboardEntrySummary } from '../../shared/types';
+import { applyNewEntry, applyPinChange } from './historyOrder';
 
 interface UseClipboardHistory {
-  entries: ClipboardEntry[];
+  entries: ClipboardEntrySummary[];
   query: string;
   setQuery: (q: string) => void;
   /** Clears the search and reloads the list (no debounce). Used while the popup hides. */
   resetForNextOpen: () => Promise<void>;
-  paste: (entry: ClipboardEntry) => void;
+  paste: (entry: ClipboardEntrySummary) => void;
   remove: (id: number) => void;
   pin: (id: number) => void;
   clearAll: () => void;
@@ -15,7 +16,7 @@ interface UseClipboardHistory {
 }
 
 export function useClipboardHistory(): UseClipboardHistory {
-  const [entries, setEntries] = useState<ClipboardEntry[]>([]);
+  const [entries, setEntries] = useState<ClipboardEntrySummary[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -53,21 +54,15 @@ export function useClipboardHistory(): UseClipboardHistory {
   // Real-time updates from main process
   useEffect(() => {
     const unsubscribe = window.clipstack.onClipboardUpdated((newEntry) => {
-      setEntries((prev) => {
-        const filtered = prev.filter((e) => e.id !== newEntry.id);
-        return [newEntry, ...filtered].slice(0, 200);
-      });
+      setEntries((prev) => applyNewEntry(prev, newEntry));
     });
 
     return unsubscribe;
   }, []);
 
-  const paste = useCallback((entry: ClipboardEntry) => {
-    if (entry.type === 'image' && entry.imageName) {
-      window.clipstack.pasteImage(entry.imageName);
-    } else {
-      window.clipstack.pasteEntry(entry.id, entry.content);
-    }
+  // The main process holds the content; the renderer only says which entry to paste.
+  const paste = useCallback((entry: ClipboardEntrySummary) => {
+    window.clipstack.pasteEntry(entry.id);
   }, []);
 
   const remove = useCallback(async (id: number) => {
@@ -76,9 +71,9 @@ export function useClipboardHistory(): UseClipboardHistory {
   }, []);
 
   const pin = useCallback(async (id: number) => {
-    await window.clipstack.pinEntry(id);
-    await fetchHistory(query);
-  }, [fetchHistory, query]);
+    const updated = await window.clipstack.pinEntry(id);
+    setEntries((prev) => (updated ? applyPinChange(prev, updated) : prev.filter((e) => e.id !== id)));
+  }, []);
 
   const clearAll = useCallback(async () => {
     await window.clipstack.clearHistory();

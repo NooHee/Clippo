@@ -10,7 +10,7 @@ const PROD_CSP = [
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
-  "img-src 'self' data:",
+  "img-src 'self' data: clippo-image:",
   "connect-src 'self'",
 ].join('; ');
 
@@ -42,7 +42,7 @@ export default defineConfig({
   server: {
     port: 5173,
     headers: {
-      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' ws://localhost:5173",
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: clippo-image:; connect-src 'self' ws://localhost:5173",
     },
   },
   resolve: {

@@ -1,4 +1,4 @@
-import type { ClipboardEntryType, ClipboardGroup, GroupEntry } from '../../shared/types';
+import type { ClipboardEntryType, ClipboardGroup, ClipboardGroupSummary, GroupEntry, GroupEntrySummary } from '../../shared/types';
 import type { DocumentStore } from './persistentJsonStore';
 import { isFiniteNumber, isRecord, isString } from './guards';
 import { isEntryType } from './historyRepository';
@@ -53,17 +53,27 @@ export function parseGroupData(json: unknown): GroupData {
   };
 }
 
+function toGroupEntrySummary(entry: GroupEntry): GroupEntrySummary {
+  const { id, type, preview, addedAt, imageName } = entry;
+  return { id, type, preview, addedAt, ...(imageName && { imageName }) };
+}
+
 export class GroupRepository {
   constructor(
     private readonly store: DocumentStore<GroupData>,
     private readonly now: () => number = Date.now,
   ) {}
 
-  list(): ClipboardGroup[] {
-    return this.store.get().groups;
+  /** Groups with entry previews only; the popup never needs the full content to render them. */
+  list(): ClipboardGroupSummary[] {
+    return this.store.get().groups.map((group) => ({ ...group, entries: group.entries.map(toGroupEntrySummary) }));
   }
 
-  create(name: string): ClipboardGroup {
+  findEntry(groupId: number, entryId: number): GroupEntry | undefined {
+    return this.find(groupId)?.entries.find((entry) => entry.id === entryId);
+  }
+
+  create(name: string): ClipboardGroupSummary {
     const data = this.store.get();
     const group: ClipboardGroup = {
       id: data.nextGroupId++,
@@ -73,7 +83,7 @@ export class GroupRepository {
     };
     data.groups.push(group);
     this.store.scheduleSave();
-    return group;
+    return { ...group, entries: [] };
   }
 
   delete(id: number): void {
@@ -95,7 +105,7 @@ export class GroupRepository {
     type: ClipboardEntryType,
     preview: string,
     imageName?: string,
-  ): GroupEntry | null {
+  ): GroupEntrySummary | null {
     const data = this.store.get();
     const group = this.find(groupId);
     if (!group || group.entries.some((entry) => entry.content === content)) return null;
@@ -110,7 +120,7 @@ export class GroupRepository {
     };
     group.entries.unshift(entry);
     this.store.scheduleSave();
-    return entry;
+    return toGroupEntrySummary(entry);
   }
 
   removeEntry(groupId: number, entryId: number): void {

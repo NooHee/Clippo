@@ -1,15 +1,15 @@
 import React, { useState, useRef, memo } from 'react';
 import { FolderPlus, Pin, Trash2 } from 'lucide-react';
-import type { ClipboardEntry } from '../../shared/types';
+import type { ClipboardEntrySummary } from '../../shared/types';
 import { useLocalization } from '../../i18n/useLocalization';
 import { ImagePreview } from './ImagePreview';
 
 interface ClipboardItemProps {
-  entry: ClipboardEntry;
-  onPaste: (entry: ClipboardEntry) => void;
+  entry: ClipboardEntrySummary;
+  onPaste: (entry: ClipboardEntrySummary) => void;
   onDelete: (id: number) => void;
   onPin: (id: number) => void;
-  onAddToGroup: (entry: ClipboardEntry) => void;
+  onAddToGroup: (entry: ClipboardEntrySummary) => void;
 }
 
 const ClipboardItemComponent: React.FC<ClipboardItemProps> = ({
@@ -51,7 +51,7 @@ const ClipboardItemComponent: React.FC<ClipboardItemProps> = ({
     if (!isTruncated() || overButtonsRef.current) return;
     if (tooltipTimer.current) clearTimeout(tooltipTimer.current);
     tooltipTimer.current = setTimeout(() => {
-      window.clipstack.showTooltip(entry.content);
+      window.clipstack.showTooltip({ kind: 'history', id: entry.id });
     }, 500);
   };
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ClipboardEntry, ClipboardEntryType } from '../../shared/types';
 import { MAX_TEXT_LENGTH } from '../../shared/types';
 import { ClipboardWatcher, SENSITIVE_CLIPBOARD_TYPES, type WatchedClipboard } from './clipboardWatcher';
+import type { ClipboardChangeListener, ClipboardChangeSource } from './clipboardChangeSource';
 
 /** A clipboard the test can change at will. Tests call `checkNow()` directly: no timers. */
 class FakeClipboard implements WatchedClipboard {
@@ -12,6 +13,7 @@ class FakeClipboard implements WatchedClipboard {
   has(format: string): boolean {
     return this.markers.has(format);
   }
+  textReads = 0;
 
   availableFormats(): string[] {
     return this.png ? ['image/png'] : ['text/plain'];
@@ -23,11 +25,33 @@ class FakeClipboard implements WatchedClipboard {
     return { isEmpty: () => true, toBitmap: () => Buffer.alloc(0), getSize: () => ({ width: 0, height: 0 }) };
   }
   readText(): string {
+    this.textReads++;
     return this.text;
   }
 }
 
-function setup(options: { ignoredApps?: string[]; frontmost?: string | null } = {}) {
+/** A change source the test triggers by hand, like the macOS change counter would. */
+class FakeChangeSource implements ClipboardChangeSource {
+  listener: ClipboardChangeListener | null = null;
+  startedWith: number[] = [];
+  stopped = 0;
+
+  start(intervalMs: number, listener: ClipboardChangeListener): void {
+    this.startedWith.push(intervalMs);
+    this.listener = listener;
+  }
+  stop(): void {
+    this.stopped++;
+    this.listener = null;
+  }
+}
+
+/** Lets pending promise callbacks (an in-flight check) run to completion. */
+const settle = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+/** Long enough that no polling tick fires during a test. */
+const NEVER_MS = 60_000;
+
+function setup(options: { ignoredApps?: string[]; frontmost?: string | null; changeSource?: ClipboardChangeSource } = {}) {
   const clipboard = new FakeClipboard();
   const emitted: ClipboardEntry[] = [];
   let nextId = 1;
@@ -49,6 +73,8 @@ function setup(options: { ignoredApps?: string[]; frontmost?: string | null } = 
     ignoredApps: () => options.ignoredApps ?? [],
     frontmostAppName: async () => options.frontmost ?? null,
     onNewEntry: (entry) => emitted.push(entry),
+    changeSource: options.changeSource,
+    logger: { error: () => undefined },
     platform: 'linux',
   });
   return { clipboard, emitted, watcher };
@@ -180,5 +206,83 @@ describe('ClipboardWatcher', () => {
 
       expect(emitted).toEqual([]);
     });
+  });
+});
+
+describe('ClipboardWatcher with a change source', () => {
+  it('reads nothing while the clipboard does not change', async () => {
+    const changeSource = new FakeChangeSource();
+    const { clipboard, watcher } = setup({ changeSource });
+    watcher.start(250);
+    const readsAfterStart = clipboard.textReads;
+    await settle();
+
+    expect(watcher.detectionMode).toBe('events');
+    expect(changeSource.startedWith).toEqual([250]);
+    expect(clipboard.textReads).toBe(readsAfterStart);
+    watcher.stop();
+  });
+
+  it('records a copy as soon as the change source reports it', async () => {
+    const changeSource = new FakeChangeSource();
+    const { clipboard, emitted, watcher } = setup({ changeSource });
+    watcher.start(250);
+
+    clipboard.text = 'copied';
+    changeSource.listener?.onChange();
+    await settle();
+
+    expect(emitted.map((entry) => entry.content)).toEqual(['copied']);
+    watcher.stop();
+  });
+
+  it('coalesces a burst of changes into at most two checks that never overlap', async () => {
+    const changeSource = new FakeChangeSource();
+    const { clipboard, emitted, watcher } = setup({ changeSource });
+    watcher.start(250);
+    const readsAfterStart = clipboard.textReads;
+
+    clipboard.text = 'last of the burst';
+    for (let i = 0; i < 5; i++) changeSource.listener?.onChange();
+    await settle();
+    await settle();
+
+    expect(clipboard.textReads - readsAfterStart).toBe(2);
+    expect(emitted.map((entry) => entry.content)).toEqual(['last of the burst']);
+    watcher.stop();
+  });
+
+  it('restarts the source with the new interval when the setting changes', () => {
+    const changeSource = new FakeChangeSource();
+    const { watcher } = setup({ changeSource });
+    watcher.start(500);
+    watcher.updateInterval(200);
+
+    expect(changeSource.startedWith).toEqual([500, 200]);
+    watcher.stop();
+    expect(changeSource.stopped).toBeGreaterThan(0);
+  });
+
+  it('falls back to polling when the change source stops working', () => {
+    const changeSource = new FakeChangeSource();
+    const { watcher } = setup({ changeSource });
+    watcher.start(NEVER_MS);
+
+    changeSource.listener?.onUnavailable(new Error('helper crashed'));
+
+    expect(watcher.detectionMode).toBe('polling');
+    watcher.stop();
+  });
+
+  it('ignores a late failure report after it was stopped', () => {
+    const changeSource = new FakeChangeSource();
+    const { watcher } = setup({ changeSource });
+    watcher.start(NEVER_MS);
+    const { listener } = changeSource;
+    watcher.stop();
+
+    listener?.onUnavailable(new Error('killed on quit'));
+
+    expect(watcher.detectionMode).toBe('events');
   });
 });
