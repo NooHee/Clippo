@@ -16,6 +16,7 @@ import type { AccessibilityMonitor } from './permissions/accessibilityMonitor';
 import { checkPermissions } from './permissionChecker';
 import { openAccessibilitySettings } from './platform/macos';
 import { perfMark } from './platform/perf';
+import { isAppUrl } from './security/webContentsGuard';
 
 export interface IpcDependencies {
   popup: PopupWindow;
@@ -36,12 +37,16 @@ export interface IpcDependencies {
 type Handler = (...args: unknown[]) => unknown;
 
 /**
- * Registers a handler that only accepts calls from our own popup window.
+ * Registers a handler that only accepts calls from our own page in our own popup window.
+ * Checking the window alone is not enough: if that window ever showed another page, the preload
+ * would expose the API to it too, so the frame URL must also be the page Clippo loaded.
  * Arguments arrive from the renderer, so every handler validates them before use.
  */
-function handle(channel: string, trustedSender: WebContents, handler: Handler): void {
+function handle(channel: string, trustedSender: WebContents, appUrl: string, handler: Handler): void {
   ipcMain.handle(channel, (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-    if (event.sender !== trustedSender) throw new Error(`Rejected IPC call on ${channel}`);
+    if (event.sender !== trustedSender || !isAppUrl(event.senderFrame?.url, appUrl)) {
+      throw new Error(`Rejected IPC call on ${channel}`);
+    }
     return handler(...args);
   });
 }
@@ -60,7 +65,7 @@ export function registerIpcHandlers(deps: IpcDependencies): void {
   const { popup, tooltip, history, settings, groups, images, paste } = deps;
   const parent: BrowserWindow = popup.browserWindow;
   const popupContents = parent.webContents;
-  const on = (channel: string, handler: Handler): void => handle(channel, popupContents, handler);
+  const on = (channel: string, handler: Handler): void => handle(channel, popupContents, popup.appUrl, handler);
 
   // History
   on(IPC.GET_HISTORY, (query) => history.list(isString(query) ? query : ''));

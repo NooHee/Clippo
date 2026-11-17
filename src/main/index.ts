@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { app, clipboard, globalShortcut, Menu, nativeImage, systemPreferences, Tray } from 'electron';
+import { app, clipboard, globalShortcut, Menu, nativeImage, session, systemPreferences, Tray } from 'electron';
 import { DEFAULT_SETTINGS, IPC, type AccessibilityState, type Settings } from '../shared/types';
 import { createStorageCodec } from './encrypting';
 import { PersistentJsonStore } from './storage/persistentJsonStore';
@@ -18,8 +18,11 @@ import { describeTray, type TrayActions } from './tray/trayMenu';
 import { frontmostAppName, openAccessibilitySettings, sendPasteKeystroke } from './platform/macos';
 import { perfMark, perfSinceStart } from './platform/perf';
 import { registerIpcHandlers } from './ipc';
+import { denyWebPermissions } from './security/webContentsGuard';
 
-const isDev = process.env.NODE_ENV === 'development';
+// `app.isPackaged` cannot be changed from outside, so a packaged build can never be switched to the
+// dev server (and DevTools) by setting NODE_ENV.
+const isDev = !app.isPackaged && process.env.NODE_ENV === 'development';
 const isMac = process.platform === 'darwin';
 const FOCUS_SETTLE_MS = 50;
 /** Distributed notification macOS posts when an app is added, removed or toggled in Accessibility. */
@@ -38,6 +41,7 @@ function assetPath(fileName: string): string {
 function bootstrap(): void {
   perfSinceStart('app.ready');
   if (isMac) app.dock?.hide(); // Packaged builds are LSUIElement already; this covers `npm start`.
+  denyWebPermissions(session.defaultSession);
 
   const activation = new ElectronAppActivation(app);
   const userData = app.getPath('userData');
